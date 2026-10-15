@@ -1,0 +1,24 @@
+name: Storyboard studio checks
+
+on:
+  push:
+    branches:
+      - feat/storyboard-studio-redesign
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+      - name: Install application dependencies
+        run: uv sync
+      - name: Python syntax and style
+        run: uv run ruff check app/routes/version_routes.py app/__init__.py tests/test_version_gallery.py
+      - name: Media gallery API tests
+        run: uv run python -m unittest discover -s tests -v
+      - name: Frontend JavaScript syntax
+        run: node --check app/static/js/studio.js
