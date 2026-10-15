@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/visual-reorder.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/search-modal.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/studio.css') }}">
     <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='icons/apple-touch-icon.png') }}">
     <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='icons/favicon-32x32.png') }}">
     <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='icons/favicon-16x16.png') }}">
@@ -126,13 +127,35 @@
                                 <line x1="12" y1="5" x2="12" y2="19"></line>
                                 <line x1="5" y1="12" x2="19" y2="12"></line>
                             </svg>
-                            <span class="button-text">New Shot</span>
+                            <span class="button-text">新建分镜</span>
                         </button>
                     </div>
                 </div>
             </div>
 
         <div class="container">
+            <!-- Production overview: script length no longer dictates image size. -->
+            <section class="studio-overview" aria-label="项目制作进度">
+                <div class="studio-overview-head">
+                    <h2>分镜工作台</h2>
+                    <p>大图检查画面，管理历史版本，逐镜头完成你的故事。</p>
+                </div>
+                <div class="studio-overview-side">
+                    <div class="studio-stat-row">
+                        <div class="studio-stat"><strong id="studio-count-shots">0</strong><span>分镜总数</span></div>
+                        <div class="studio-stat"><strong id="studio-count-images">0</strong><span>已上传首帧</span></div>
+                        <div class="studio-stat"><strong id="studio-count-videos">0</strong><span>已生成视频</span></div>
+                    </div>
+                    <div class="studio-progress" aria-label="视频制作进度">
+                        <div class="studio-progress-track"><div id="studio-progress-bar"></div></div>
+                        <span id="studio-progress-label">0%</span>
+                    </div>
+                </div>
+            </section>
+            <div class="studio-section-heading">
+                <div><h3>镜头列表</h3><p>拖动镜头标题调整顺序 · 点击素材查看 · 上传后可比较历史版本</p></div>
+                <button id="studio-density-toggle" type="button" aria-pressed="false">切换紧凑视图</button>
+            </div>
             <div class="loading" id="loading">Loading shots...</div>
             <div class="shot-grid" id="shot-grid" style="display: none;">
                 <div class="grid-header">
@@ -458,6 +481,26 @@
 
     <footer class='app-footer'>Maintained by <a href="https://genai.taruma.info" target="_blank" rel="noopener">Taruma Sakti</a>. <a href="https://github.com/taruma/shotbuddy" target="_blank" rel="noopener">View on GitHub</a>. Built with <a href="https://cline.bot" target="_blank" rel="noopener">Cline</a>.</footer>
     
+    <!-- Storyboard media version gallery: separate from existing playback modals. -->
+    <div id="studio-version-modal" class="studio-version-modal" hidden>
+        <div class="studio-version-backdrop" aria-hidden="true"></div>
+        <section class="studio-version-panel" role="dialog" aria-modal="true" aria-labelledby="studio-version-title">
+            <div class="studio-version-header">
+                <div>
+                    <h2 id="studio-version-title">历史版本</h2>
+                    <p id="studio-version-subtitle">正在读取…</p>
+                </div>
+                <button id="studio-version-close" class="studio-version-close" type="button" aria-label="关闭版本列表">×</button>
+            </div>
+            <div id="studio-version-items" class="studio-version-items"></div>
+            <div class="studio-version-footer">
+                <p>每次上传会保存为新版本。选用旧版本不会删除其他文件，豆包下载的视频也可以直接导入。</p>
+                <input id="studio-version-file" type="file" hidden>
+                <button id="studio-version-upload" type="button">+ 上传新版本</button>
+            </div>
+        </section>
+    </div>
+
     <!-- Back to Top Button -->
     <button class="back-to-top" id="backToTop" title="Back to Top"></button>
     
@@ -466,5 +509,6 @@
     <script src="{{ url_for('static', filename='js/visual-reorder.js') }}"></script>
     <script src="{{ url_for('static', filename='js/search-modal.js') }}"></script>
     <script src="{{ url_for('static', filename='js/modal-behavior.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/studio.js') }}"></script>
 </body>
 </html>
