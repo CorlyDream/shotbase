@@ -376,6 +376,24 @@
     }, true);
 
     document.addEventListener("keydown", event => {
+        // Keep keyboard focus inside the version picker while it is open.
+        if (event.key === "Tab" && gallery) {
+            const panel = document.querySelector("#studio-version-modal .studio-version-panel");
+            const controls = [...panel.querySelectorAll(
+                'button:not([disabled]), a[href], input:not([disabled]):not([hidden])'
+            )].filter(node => node.getClientRects().length > 0);
+            if (controls.length) {
+                const first = controls[0];
+                const last = controls[controls.length - 1];
+                if (event.shiftKey && document.activeElement === first) {
+                    event.preventDefault();
+                    last.focus();
+                } else if (!event.shiftKey && document.activeElement === last) {
+                    event.preventDefault();
+                    first.focus();
+                }
+            }
+        }
         if (event.key === "Escape" && gallery) {
             event.preventDefault();
             closeVersionGallery();
