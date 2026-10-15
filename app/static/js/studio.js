@@ -45,10 +45,12 @@
         header.appendChild(makeElement("span", "", LABELS[assetType]));
         const count = makeElement(
             "span", "studio-version-count",
-            maxVersion ? maxVersion + " 个版本" : "未上传"
+            maxVersion ? "最高 v" + String(maxVersion).padStart(3, "0") : "未上传"
         );
         header.appendChild(count);
         zone.insertBefore(header, zone.firstChild);
+        const caption = zone.querySelector(".asset-caption-input");
+        if (caption) caption.placeholder = "素材备注（可选）";
 
         if (maxVersion > 0) {
             const badge = zone.querySelector(".version-badge");
@@ -114,7 +116,7 @@
         const zone = row.querySelector('[data-studio-type="' + assetType + '"]');
         if (!zone) return;
         const count = zone.querySelector(".studio-version-count");
-        if (count) count.textContent = (info.max_version || 0) + " 个版本";
+        if (count) count.textContent = "最高 v" + String(info.max_version || 0).padStart(3, "0");
         const badge = zone.querySelector(".version-badge");
         if (badge) badge.classList.toggle("multiple-versions", (info.max_version || 0) > 1);
     }
