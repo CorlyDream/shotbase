@@ -514,6 +514,8 @@ body.studio-design {
     width: 100%;
     min-width: 0;
     align-self: stretch;
+    min-height: 0;
+    overflow: hidden;
     background: #172128;
     border: 1px solid var(--studio-border);
     border-radius: 13px;
@@ -544,15 +546,21 @@ body.studio-design {
     white-space: nowrap;
 }
 
+/* The original JS sets an inline height equal to scrollHeight. Suppress it in
+ * studio cards, so the preview fills the card rather than sizing to text. */
 .studio-design .studio-shot-card .notes-input {
+    flex: 1 1 0;
     width: 100%;
     min-width: 0;
-    height: auto;
-    min-height: 145px;
-    max-height: 295px;
+    height: 0 !important;
+    min-height: 0;
+    max-height: none;
     line-height: 1.68;
-    overflow: hidden;
-    padding: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    padding: 0 3px 0 0;
     color: #cbd5d8;
     background: transparent;
     border: none;
@@ -564,10 +572,174 @@ body.studio-design {
     outline-offset: 6px;
 }
 
-.studio-design .studio-script-expanded .notes-input {
-    max-height: min(74vh, 800px);
-    overflow: auto;
-    resize: vertical;
+/* Full-text editor: a modal instead of stretching the production card. */
+.studio-notes-dialog {
+    position: fixed;
+    inset: 0;
+    margin: auto;
+    padding: 0;
+    width: min(960px, calc(100vw - 32px));
+    height: min(800px, calc(100dvh - 56px));
+    max-width: none;
+    max-height: none;
+    background: #202c35;
+    color: #f3f5f4;
+    border: 1px solid #52616a;
+    border-radius: 18px;
+    box-shadow: 0 35px 100px rgba(0, 0, 0, .55);
+    overflow: hidden;
+}
+
+.studio-notes-dialog[open] {
+    display: flex;
+    flex-direction: column;
+}
+
+.studio-notes-dialog::backdrop {
+    background: rgba(5, 13, 20, .78);
+    backdrop-filter: blur(5px);
+}
+
+.studio-notes-dialog-header,
+.studio-notes-dialog-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 21px 27px;
+}
+
+.studio-notes-dialog-header {
+    border-bottom: 1px solid #40505a;
+}
+
+.studio-notes-dialog-header h2 {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 720;
+    line-height: 1.4;
+}
+
+.studio-notes-dialog-description {
+    margin-top: 5px;
+    font-size: 12px;
+    color: #a6b9c1;
+}
+
+.studio-notes-dialog-close {
+    align-self: flex-start;
+    flex-shrink: 0;
+    border: 0;
+    border-radius: 10px;
+    width: 40px;
+    height: 40px;
+    color: #e7ecee;
+    background: #354650;
+    cursor: pointer;
+    font-size: 25px;
+}
+
+.studio-notes-dialog-body {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 11px;
+    padding: 22px 27px;
+    min-height: 0;
+}
+
+.studio-notes-dialog-label {
+    font-size: 13px;
+    font-weight: 650;
+    color: #c9d8db;
+}
+
+.studio-notes-dialog-editor {
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+    padding: 18px 20px;
+    border: 1px solid #455660;
+    border-radius: 12px;
+    outline-offset: 3px;
+    resize: none;
+    overflow-y: auto;
+    background: #131e25;
+    color: #f0f3f3;
+    font-size: 15px;
+    line-height: 1.8;
+    white-space: pre-wrap;
+    font-family: inherit;
+}
+
+.studio-notes-dialog-editor:focus-visible,
+.studio-notes-dialog button:focus-visible {
+    outline: 3px solid #82d3c9;
+    outline-offset: 3px;
+}
+
+.studio-notes-dialog-footer {
+    border-top: 1px solid #40505a;
+}
+
+.studio-notes-dialog-footer p {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.6;
+    color: #a6b9c1;
+}
+
+.studio-notes-dialog-actions {
+    display: flex;
+    flex-shrink: 0;
+    gap: 10px;
+}
+
+.studio-notes-dialog-actions button {
+    padding: 11px 19px;
+    border-radius: 9px;
+    border: 1px solid #536771;
+    cursor: pointer;
+    font-weight: 700;
+    background: #303f48;
+    color: #edf3f1;
+}
+
+.studio-notes-dialog-actions #studio-notes-save {
+    background: #f3bd73;
+    border-color: #f3bd73;
+    color: #243029;
+}
+
+.studio-notes-dialog-actions #studio-notes-save:disabled {
+    opacity: .6;
+    cursor: wait;
+}
+
+@media (max-width: 640px) {
+    .studio-notes-dialog {
+        width: calc(100vw - 20px);
+        height: calc(100dvh - 20px);
+        border-radius: 14px;
+    }
+
+    .studio-notes-dialog-header,
+    .studio-notes-dialog-footer {
+        padding: 16px;
+    }
+
+    .studio-notes-dialog-body {
+        padding: 15px;
+    }
+
+    .studio-notes-dialog-footer {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .studio-notes-dialog-actions {
+        align-self: flex-end;
+    }
 }
 
 .studio-design .drop-between-rows {
@@ -830,12 +1002,8 @@ body.studio-dialog-open {
     max-height: 260px;
 }
 
-.studio-compact .studio-shot-card .notes-input {
-    max-height: 170px;
-}
-
-.studio-compact .studio-script-expanded .notes-input {
-    max-height: min(74vh, 800px);
+.studio-compact .studio-shot-card > .notes-cell {
+    padding: 12px;
 }
 
 /* Responsive layout: preserve image size by stacking rather than shrinking. */
@@ -891,7 +1059,7 @@ body.studio-dialog-open {
         min-height: 0;
         max-height: none;
     }
-    .studio-design .studio-shot-card .notes-input { max-height: 150px; }
+    .studio-design .studio-shot-card > .notes-cell { min-height: 220px; }
     .studio-version-header, .studio-version-footer { padding: 17px; }
     .studio-version-items { padding: 15px; }
 }
