@@ -80,7 +80,7 @@
         return zone.outerHTML;
     }
 
-    /** Add a short, expandable script panel to each existing shot row. */
+    /** Add a full-height inline script preview with an explicit dialog action. */
     function decorateShot(row, shot) {
         row.classList.add("studio-shot-card");
         const notesCell = row.querySelector(".notes-cell");
@@ -91,7 +91,8 @@
         const toggle = makeElement("button", "studio-notes-toggle", "展开全文");
         toggle.type = "button";
         toggle.dataset.studioAction = "notes";
-        toggle.setAttribute("aria-expanded", "false");
+        toggle.setAttribute("aria-haspopup", "dialog");
+        toggle.setAttribute("aria-controls", "studio-notes-modal");
         head.appendChild(toggle);
         notesCell.insertBefore(head, notesCell.firstChild);
 
@@ -339,6 +340,95 @@
         input.click();
     }
 
+    // Script editing is intentionally separate from version management; a native
+    // dialog keeps editing independent of card dimensions and enables Escape.
+    const notesDialog = document.getElementById("studio-notes-modal");
+    const notesEditor = document.getElementById("studio-notes-editor");
+    const notesSaveButton = document.getElementById("studio-notes-save");
+    let notesDialogState = null;
+    let notesSaving = false;
+
+    /** Open the complete script from the current inline value, including unsaved typing. */
+    function openNotesDialog(row, trigger) {
+        const preview = row.querySelector(".notes-input");
+        if (!preview || !notesDialog || notesDialog.open) return;
+
+        const shotName = row.id.replace(/^shot-row-/, "");
+        const shot = shots.find(item => item.name === shotName);
+        const title = (shot && shot.display_name) || shotName;
+        notesDialogState = {shotName, trigger};
+
+        document.getElementById("studio-notes-dialog-title").textContent =
+            title + " · 分镜脚本";
+        notesEditor.value = preview.value;
+        notesDialog.showModal();
+        notesEditor.focus();
+    }
+
+    /** Close without editing the inline script; saving is an explicit action. */
+    function closeNotesDialog() {
+        if (notesDialog.open && !notesSaving) notesDialog.close();
+    }
+
+    /** Persist edited script via ShotBase's existing notes API, then sync card state. */
+    async function saveNotesDialog() {
+        if (!notesDialogState || notesSaving) return;
+
+        const {shotName} = notesDialogState;
+        const value = notesEditor.value;
+        notesSaving = true;
+        notesSaveButton.disabled = true;
+        notesSaveButton.textContent = "保存中…";
+
+        try {
+            const response = await fetch("/api/shots/notes", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({shot_name: shotName, notes: value})
+            });
+            const result = await response.json();
+            if (!response.ok || !result.success) {
+                throw new Error(result.error || "保存脚本失败");
+            }
+
+            const shot = shots.find(item => item.name === shotName);
+            if (shot) shot.notes = value;
+            const preview = document.getElementById("shot-row-" + shotName)
+                ?.querySelector(".notes-input");
+            if (preview) preview.value = value;
+            notesDialog.close();
+            showNotification("分镜脚本已保存");
+        } catch (error) {
+            showNotification(error.message || "保存脚本失败", "error");
+        } finally {
+            notesSaving = false;
+            notesSaveButton.disabled = false;
+            notesSaveButton.textContent = "保存脚本";
+        }
+    }
+
+    // Keep native dialog close methods and focus restoration in one place.
+    document.getElementById("studio-notes-close").addEventListener("click", closeNotesDialog);
+    document.getElementById("studio-notes-cancel").addEventListener("click", closeNotesDialog);
+    notesSaveButton.addEventListener("click", saveNotesDialog);
+    notesDialog.addEventListener("cancel", event => {
+        if (notesSaving) event.preventDefault();
+    });
+    notesDialog.addEventListener("close", () => {
+        const trigger = notesDialogState && notesDialogState.trigger;
+        notesDialogState = null;
+        if (trigger && trigger.isConnected) trigger.focus();
+    });
+    notesDialog.addEventListener("click", event => {
+        // Native dialog backdrop clicks target the dialog itself, not its panel.
+        if (event.target !== notesDialog || notesSaving) return;
+        const bounds = notesDialog.getBoundingClientRect();
+        if (event.clientX < bounds.left || event.clientX > bounds.right ||
+            event.clientY < bounds.top || event.clientY > bounds.bottom) {
+            closeNotesDialog();
+        }
+    });
+
     document.addEventListener("click", event => {
         const badge = event.target.closest(".studio-asset .version-badge");
         const action = event.target.closest("[data-studio-action]");
@@ -358,9 +448,7 @@
             if (action && action.dataset.studioAction === "notes") {
                 event.preventDefault();
                 const row = action.closest(".studio-shot-card");
-                const expanded = row.classList.toggle("studio-script-expanded");
-                action.textContent = expanded ? "收起脚本" : "展开全文";
-                action.setAttribute("aria-expanded", String(expanded));
+                if (row) openNotesDialog(row, action);
             }
         }
         if (event.target.id === "studio-version-close" ||
