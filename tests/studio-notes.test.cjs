@@ -42,6 +42,7 @@ function makeStudioHarness() {
     };
     const action = element({
         dataset: {studioAction: "notes"},
+        classList: {contains() { return false; }},
         isConnected: true,
         closest(selector) {
             if (selector === "[data-studio-action]") return this;
