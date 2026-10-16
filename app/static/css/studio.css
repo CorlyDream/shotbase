@@ -249,8 +249,8 @@ body.studio-design {
         "first first last video notes"
         "first first alt audio notes";
     align-items: stretch;
-    gap: 13px;
-    padding: 20px;
+    gap: 9px;
+    padding: 14px;
     margin: 0;
     background: var(--studio-surface);
     border: 1px solid var(--studio-border);
@@ -320,10 +320,10 @@ body.studio-design {
 
 .studio-design .drop-zone.studio-asset {
     min-width: 0;
-    min-height: 160px;
+    min-height: 118px;
     height: 100%;
     margin: 0;
-    padding: 12px;
+    padding: 9px;
     display: flex;
     flex-direction: column;
     align-items: stretch;
@@ -389,13 +389,13 @@ body.studio-design {
 }
 
 .studio-design .studio-asset-first_image .preview-thumbnail {
-    min-height: 235px;
-    max-height: 375px;
+    min-height: 165px;
+    max-height: 260px;
     object-fit: contain;
 }
 
 .studio-design .studio-asset-first_image .video-thumbnail {
-    min-height: 235px;
+    min-height: 165px;
 }
 
 .studio-design .studio-asset .version-badge {
@@ -510,7 +510,7 @@ body.studio-design {
 .studio-design .studio-shot-card > .notes-cell {
     grid-area: notes;
     margin: 0;
-    padding: 14px;
+    padding: 12px;
     width: 100%;
     min-width: 0;
     align-self: stretch;
@@ -986,24 +986,282 @@ body.studio-dialog-open {
     padding: 30px;
 }
 
-/* Compact mode keeps asset browsing usable on smaller laptop screens. */
-.studio-compact .studio-shot-card.studio-shot-card {
-    gap: 9px;
-    padding: 14px;
+/* The former compact density is now the default comfortable mode above.
+ * In compact mode every shot becomes a ~230px production strip, allowing
+ * 2–3 consecutive shots to remain visible on typical desktop viewports.
+ * The DOM order never changes: original upload/drag handlers use child indices.
+ */
+#main-interface.studio-compact > .container {
+    padding-block: 14px 30px;
 }
 
-.studio-compact .studio-asset.studio-asset {
-    min-height: 118px;
+#main-interface.studio-compact .studio-overview {
+    align-items: center;
+    padding: 0 0 12px;
+    margin-bottom: 12px;
+    gap: 20px;
+}
+
+#main-interface.studio-compact .studio-overview-head h2 {
+    margin: 0;
+    font-size: 20px;
+}
+
+#main-interface.studio-compact .studio-overview-head p,
+#main-interface.studio-compact .studio-section-heading p,
+#main-interface.studio-compact .studio-progress {
+    display: none;
+}
+
+#main-interface.studio-compact .studio-overview-side {
+    flex: 0 1 330px;
+    min-width: 0;
+}
+
+#main-interface.studio-compact .studio-stat-row {
+    margin: 0;
+    gap: 18px;
+}
+
+#main-interface.studio-compact .studio-stat strong {
+    font-size: 19px;
+}
+
+#main-interface.studio-compact .studio-stat span {
+    font-size: 10px;
+}
+
+#main-interface.studio-compact .studio-section-heading {
+    margin-bottom: 9px;
+}
+
+#main-interface.studio-compact .studio-section-heading h3 {
+    font-size: 15px;
+}
+
+#main-interface.studio-compact .shot-row.studio-shot-card {
+    grid-template-columns:
+        74px minmax(280px, 1.8fr)
+        minmax(117px, .68fr) minmax(117px, .68fr)
+        minmax(215px, 1.12fr) 36px;
+    grid-template-areas:
+        "title first last video notes archive"
+        "title first alt audio notes archive";
+    grid-template-rows: repeat(2, minmax(103px, 1fr));
+    gap: 7px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    box-shadow: none;
+}
+
+#main-interface.studio-compact .studio-shot-card > .shot-name {
+    min-height: 0;
+    padding: 6px 0;
+    font-size: 15px;
+    justify-content: flex-start;
+    align-items: flex-start;
+    overflow-wrap: anywhere;
+}
+
+#main-interface.studio-compact .shot-name .shot-code {
+    font-size: 10px;
+}
+
+#main-interface.studio-compact .studio-shot-card > .action-cell {
+    padding: 0;
+}
+
+#main-interface.studio-compact .action-cell .icon-btn {
+    width: 30px;
+    height: 30px;
+    border-radius: 7px;
+}
+
+#main-interface.studio-compact .drop-zone.studio-asset {
+    height: 100%;
+    min-height: 0;
+    padding: 7px;
+    gap: 4px;
+    border-radius: 9px;
+}
+
+#main-interface.studio-compact .studio-asset-label {
+    font-size: 11px;
+    line-height: 1.3;
+}
+
+#main-interface.studio-compact .studio-version-count {
+    font-size: 10px;
+}
+
+#main-interface.studio-compact .studio-asset:not(.studio-asset-first_image) .studio-version-count {
+    display: none;
+}
+
+#main-interface.studio-compact .studio-asset .file-preview {
+    flex: 0 1 auto;
+    gap: 3px;
+}
+
+/* Keep full-resolution images but limit their *displayed* height in the strip. */
+#main-interface.studio-compact .studio-asset-first_image .preview-thumbnail {
+    height: 150px;
+    min-height: 0;
+    max-height: 150px;
+    aspect-ratio: 16 / 9;
+    object-fit: contain;
+}
+
+#main-interface.studio-compact .studio-asset:not(.studio-asset-first_image) .preview-thumbnail,
+#main-interface.studio-compact .studio-asset:not(.studio-asset-first_image) .video-thumbnail {
+    height: 55px;
+    min-height: 0;
+    max-height: 55px;
+    aspect-ratio: 16 / 9;
+    object-fit: contain;
+}
+
+#main-interface.studio-compact .studio-asset .asset-caption-input {
+    padding: 3px 6px;
+    font-size: 11px;
+    min-height: 22px;
+}
+
+#main-interface.studio-compact .studio-asset:not(.studio-asset-first_image) .asset-caption-input {
+    display: none;
+}
+
+#main-interface.studio-compact .studio-asset .version-badge {
+    font-size: 10px;
+    padding: 3px 6px;
+    left: 4px;
+    bottom: 4px;
+}
+
+#main-interface.studio-compact .studio-asset .prompt-button {
+    font-size: 10px;
+    padding: 3px 6px;
+    bottom: 4px;
+    right: 4px;
+}
+
+#main-interface.studio-compact .studio-asset-actions {
+    flex-wrap: nowrap;
+    gap: 5px;
+    margin-top: 1px;
+}
+
+#main-interface.studio-compact .studio-action-link {
+    padding: 2px 0;
+    font-size: 11px;
+    line-height: 1.3;
+}
+
+#main-interface.studio-compact .studio-asset:not(.studio-asset-first_image) .studio-action-link {
+    font-size: 0;
+}
+
+#main-interface.studio-compact .studio-asset:not(.studio-asset-first_image) [data-studio-action="versions"]::after {
+    content: "版本";
+    font-size: 11px;
+}
+
+#main-interface.studio-compact .studio-asset:not(.studio-asset-first_image) [data-studio-action="upload"]::after {
+    content: "+ 新版";
+    font-size: 11px;
+}
+
+/* A compact placeholder uses the visible label and one large hit target. */
+#main-interface.studio-compact .studio-asset.empty .drop-placeholder::before {
+    width: 26px;
+    height: 26px;
+    margin: 0 0 4px;
+    font-size: 19px;
+}
+
+#main-interface.studio-compact .studio-asset.empty .drop-placeholder .text {
+    font-size: 10px;
+    line-height: 1.35;
+}
+
+#main-interface.studio-compact .studio-asset:not(.studio-asset-first_image).empty .drop-placeholder .text {
+    display: none;
+}
+
+#main-interface.studio-compact .studio-shot-card > .notes-cell {
+    min-height: 0;
     padding: 9px;
+    gap: 6px;
+    border-radius: 9px;
 }
 
-.studio-compact .studio-asset-first_image .preview-thumbnail {
-    min-height: 165px;
-    max-height: 260px;
+#main-interface.studio-compact .studio-notes-head {
+    gap: 4px;
 }
 
-.studio-compact .studio-shot-card > .notes-cell {
-    padding: 12px;
+#main-interface.studio-compact .studio-notes-title,
+#main-interface.studio-compact .studio-notes-toggle {
+    font-size: 11px;
+}
+
+#main-interface.studio-compact .studio-shot-card .notes-input {
+    font-size: 11px;
+    line-height: 1.55;
+}
+
+#main-interface.studio-compact .drop-between-rows {
+    height: 7px;
+    margin: 0 8px;
+}
+
+#main-interface.studio-compact .drop-between-rows.final-drop {
+    height: 16px;
+    margin-block: 2px;
+}
+
+/* Narrow laptops retain the compact strip without squeezing labels to zero. */
+@media (max-width: 1100px) {
+    #main-interface.studio-compact .shot-row.studio-shot-card {
+        grid-template-columns:
+            62px minmax(210px, 1.5fr)
+            minmax(98px, .65fr) minmax(98px, .65fr)
+            minmax(190px, 1.05fr);
+        grid-template-areas:
+            "title first last video notes"
+            "archive first alt audio notes";
+        padding: 9px;
+        gap: 6px;
+    }
+}
+
+/* Phone/tablet view is intentionally stacked so touch targets stay usable. */
+@media (max-width: 800px) {
+    #main-interface.studio-compact .shot-row.studio-shot-card {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-areas:
+            "title archive"
+            "first first"
+            "video notes"
+            "last notes"
+            "alt audio";
+        grid-template-rows: auto;
+        padding: 9px;
+    }
+
+    #main-interface.studio-compact .studio-asset-first_image .preview-thumbnail {
+        max-height: 240px;
+        height: auto;
+        aspect-ratio: 16 / 9;
+    }
+
+    #main-interface.studio-compact .studio-shot-card > .notes-cell {
+        min-height: 190px;
+    }
+
+    #main-interface.studio-compact .studio-overview-side {
+        flex: 1 1 auto;
+        width: 100%;
+    }
 }
 
 /* Responsive layout: preserve image size by stacking rather than shrinking. */
