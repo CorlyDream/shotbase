@@ -28,6 +28,45 @@
         return node;
     }
 
+    /** Construct the original-resolution preview URL for an existing frame. */
+    function fullResolutionImageUrl(shotName, assetType, version) {
+        return "/api/shots/image/" + encodeURIComponent(shotName) + "/" +
+            encodeURIComponent(assetType) + "?v=" + encodeURIComponent(String(version || 0));
+    }
+
+    /** Replace a small generated thumbnail with the actual stored image.
+     *
+     * ShotBase makes 240x180 thumbnails for navigation, but the studio displays
+     * frame previews hundreds of pixels wide. This resolves the blur without
+     * increasing thumbnail cache sizes or editing the source image.
+     */
+    function applyFullResolutionPreview(shotName, assetType, info, zone) {
+        if (assetType !== "first_image" && assetType !== "last_image") return;
+        if (!info || !info.file || !zone) return;
+
+        const image = zone.querySelector("img.preview-thumbnail");
+        if (!image) return;
+
+        const fallbackThumbnail = image.getAttribute("src");
+        const imageUrl = fullResolutionImageUrl(
+            shotName, assetType, info.current_version || info.max_version
+        );
+        if (image.getAttribute("src") === imageUrl) return;
+
+        image.onerror = () => {
+            // Legacy projects may contain files that cannot be served by the
+            // promoted-image endpoint; show the old thumbnail if possible.
+            image.onerror = null;
+            if (fallbackThumbnail && !fallbackThumbnail.includes("/api/shots/image/")) {
+                image.src = fallbackThumbnail;
+            }
+        };
+        image.src = imageUrl;
+        image.loading = "lazy";
+        image.decoding = "async";
+        image.alt = LABELS[assetType] + "（原图清晰预览）";
+    }
+
     /** Extend the existing asset drop zone without changing its direct-child position. */
     function decorateAsset(shot, assetType, markup) {
         const holder = document.createElement("div");
@@ -51,6 +90,7 @@
         zone.insertBefore(header, zone.firstChild);
         const caption = zone.querySelector(".asset-caption-input");
         if (caption) caption.placeholder = "素材备注（可选）";
+        applyFullResolutionPreview(shot.name, assetType, info, zone);
 
         if (maxVersion > 0) {
             const badge = zone.querySelector(".version-badge");
@@ -172,6 +212,9 @@
         window.updateDropZoneForShot = function (shotName, assetType, shotData) {
             const result = originalUpdateDropZone(shotName, assetType, shotData);
             syncSlotCount(shotName, assetType, shotData);
+            const target = document.getElementById("shot-row-" + shotName)
+                ?.querySelector('[data-studio-type="' + assetType + '"]');
+            applyFullResolutionPreview(shotName, assetType, shotData[assetType], target);
             refreshStudioOverview();
             return result;
         };
@@ -517,6 +560,17 @@
     });
 
     document.body.classList.add("studio-design");
+
+    // The previous release's "compact" dimensions are the new comfortable
+    // default. Migrate this saved preference once to prevent a surprise jump
+    // into the much denser strip view immediately after upgrading.
+    if (localStorage.getItem("studio-density-v2") !== "true") {
+        if (localStorage.getItem("studio-density") === "compact") {
+            localStorage.setItem("studio-density", "comfortable");
+        }
+        localStorage.setItem("studio-density-v2", "true");
+    }
+
     const densityButton = document.getElementById("studio-density-toggle");
     if (densityButton && localStorage.getItem("studio-density") === "compact") {
         document.getElementById("main-interface").classList.add("studio-compact");
