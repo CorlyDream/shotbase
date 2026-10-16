@@ -97,7 +97,7 @@ function makeStudioHarness() {
         },
         window: {},
         shots,
-        localStorage: {getItem() { return null; }},
+        localStorage: {getItem() { return null; }, setItem() {}},
         fetch: async (url, options) => {
             requests.push({url, options});
             return {ok: httpResult.ok, json: async () => httpResult.body};
