@@ -481,6 +481,35 @@
 
     <footer class='app-footer'>Maintained by <a href="https://genai.taruma.info" target="_blank" rel="noopener">Taruma Sakti</a>. <a href="https://github.com/taruma/shotbuddy" target="_blank" rel="noopener">View on GitHub</a>. Built with <a href="https://cline.bot" target="_blank" rel="noopener">Cline</a>.</footer>
     
+    <!-- Full-text script editor. Native dialog handles focus and Escape keys. -->
+    <dialog id="studio-notes-modal"
+            class="studio-notes-dialog"
+            aria-labelledby="studio-notes-dialog-title"
+            aria-describedby="studio-notes-dialog-description">
+        <header class="studio-notes-dialog-header">
+            <div>
+                <h2 id="studio-notes-dialog-title">分镜脚本</h2>
+                <p id="studio-notes-dialog-description" class="studio-notes-dialog-description">
+                    在这里查看或编辑完整分镜，保存后将同步回当前镜头。
+                </p>
+            </div>
+            <button id="studio-notes-close" class="studio-notes-dialog-close"
+                    type="button" aria-label="关闭脚本弹窗">×</button>
+        </header>
+        <div class="studio-notes-dialog-body">
+            <label for="studio-notes-editor" class="studio-notes-dialog-label">完整脚本文本</label>
+            <textarea id="studio-notes-editor" class="studio-notes-dialog-editor"
+                      placeholder="填写镜头画面、动作描述和英文对白…"></textarea>
+        </div>
+        <footer class="studio-notes-dialog-footer">
+            <p>取消不会修改卡片中的脚本；点击保存才会提交本次修改。</p>
+            <div class="studio-notes-dialog-actions">
+                <button id="studio-notes-cancel" type="button">取消</button>
+                <button id="studio-notes-save" type="button">保存脚本</button>
+            </div>
+        </footer>
+    </dialog>
+
     <!-- Storyboard media version gallery: separate from existing playback modals. -->
     <div id="studio-version-modal" class="studio-version-modal" hidden>
         <div class="studio-version-backdrop" aria-hidden="true"></div>
