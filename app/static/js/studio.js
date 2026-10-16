@@ -61,10 +61,10 @@
                 image.src = fallbackThumbnail;
             }
         };
-        image.src = imageUrl;
         image.loading = "lazy";
         image.decoding = "async";
         image.alt = LABELS[assetType] + "（原图清晰预览）";
+        image.src = imageUrl;
     }
 
     /** Extend the existing asset drop zone without changing its direct-child position. */
