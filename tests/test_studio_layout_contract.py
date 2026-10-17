@@ -36,8 +36,24 @@ class StudioLayoutContractTests(unittest.TestCase):
         self.assertIn("#main-interface.studio-compact .shot-row.studio-shot-card", self.css)
         self.assertIn('"title first last video notes archive"', self.css)
         self.assertIn('"title first alt audio notes archive"', self.css)
-        self.assertIn("max-height: 150px;", self.css)
         self.assertIn("#main-interface.studio-compact .studio-overview", self.css)
+
+    def test_compact_first_frame_places_image_left_and_controls_right(self):
+        """First frame should use a side toolbar instead of a small centered thumbnail."""
+        self.assertIn(".studio-asset-first_image.with-caption", self.css)
+        self.assertIn('"image label"', self.css)
+        self.assertIn('"image version"', self.css)
+        self.assertIn('"image prompt"', self.css)
+        self.assertIn('"image caption"', self.css)
+        self.assertIn('"image actions"', self.css)
+        self.assertIn(".studio-asset-first_image .file-preview", self.css)
+        self.assertIn("display: contents;", self.css)
+        self.assertIn("grid-area: image;", self.css)
+        self.assertIn("grid-area: actions;", self.css)
+        self.assertIn("object-fit: contain;", self.css)
+        self.assertIn("object-position: left center;", self.css)
+        # The old 150px height caused wide black bars and should be gone.
+        self.assertNotRegex(self.css, r"\\.studio-asset-first_image \\.preview-thumbnail\\s*\\{[^}]*height:\\s*150px;")
 
     def test_prior_compact_setting_is_migrated_to_new_comfortable_view(self):
         """Do not surprise existing users with a much denser layout on upgrade."""
