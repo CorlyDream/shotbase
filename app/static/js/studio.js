@@ -88,6 +88,22 @@
         );
         header.appendChild(count);
         zone.insertBefore(header, zone.firstChild);
+
+        // In compact mode, the selected version is a clear header control.
+        // The original version badge remains available in the comfortable view.
+        if (assetType === "first_image" && maxVersion > 0) {
+            const current = info.current_version || info.max_version;
+            const versionControl = makeElement(
+                "button", "studio-current-version",
+                "v" + String(current).padStart(3, "0") + " ▾"
+            );
+            versionControl.type = "button";
+            versionControl.dataset.studioAction = "versions";
+            versionControl.title = "查看全部首帧版本";
+            versionControl.setAttribute("aria-label", "查看首帧历史版本");
+            header.appendChild(versionControl);
+        }
+
         const caption = zone.querySelector(".asset-caption-input");
         if (caption) caption.placeholder = "素材备注（可选）";
         applyFullResolutionPreview(shot.name, assetType, info, zone);
@@ -104,10 +120,34 @@
             const galleryButton = makeElement("button", "studio-action-link", "查看版本");
             galleryButton.type = "button";
             galleryButton.dataset.studioAction = "versions";
+            actions.appendChild(galleryButton);
+
+            // Compact first frame: footer tools remain discoverable while the
+            // picture receives the full width. Comfortable mode keeps its
+            // original overlay prompt and inline caption field.
+            if (assetType === "first_image") {
+                const promptAction = makeElement(
+                    "button", "studio-action-link studio-first-action", "提示词"
+                );
+                promptAction.type = "button";
+                promptAction.dataset.studioAction = "prompt";
+                promptAction.title = "查看或编辑首帧提示词";
+
+                const captionAction = makeElement(
+                    "button", "studio-action-link studio-first-action", "备注"
+                );
+                captionAction.type = "button";
+                captionAction.dataset.studioAction = "caption";
+                captionAction.title = "编辑首帧素材备注";
+                captionAction.setAttribute("aria-expanded", "false");
+
+                actions.append(promptAction, captionAction);
+            }
+
             const uploadButton = makeElement("button", "studio-action-link studio-action-add", "+ 上传新版");
             uploadButton.type = "button";
             uploadButton.dataset.studioAction = "upload";
-            actions.append(galleryButton, uploadButton);
+            actions.appendChild(uploadButton);
             zone.appendChild(actions);
         } else {
             const hint = zone.querySelector(".drop-placeholder .text");
@@ -160,6 +200,11 @@
         if (count) count.textContent = "最高 v" + String(info.max_version || 0).padStart(3, "0");
         const badge = zone.querySelector(".version-badge");
         if (badge) badge.classList.toggle("multiple-versions", (info.max_version || 0) > 1);
+        const currentButton = zone.querySelector(".studio-current-version");
+        if (currentButton) {
+            const currentVersion = info.current_version || info.max_version || 0;
+            currentButton.textContent = "v" + String(currentVersion).padStart(3, "0") + " ▾";
+        }
     }
 
     /** Build a small production summary from the currently loaded shot state. */
@@ -472,6 +517,20 @@
         }
     });
 
+    /** Reveal the existing caption field only while the user edits the note.
+     *
+     * The original caption field retains its onblur/onchange save handler.
+     * This avoids a second backend write path and does not alter media files.
+     */
+    function toggleCaptionEditor(zone, trigger) {
+        const caption = zone?.querySelector(".asset-caption-input");
+        if (!caption) return;
+
+        const isOpen = zone.classList.toggle("studio-caption-visible");
+        trigger.setAttribute("aria-expanded", String(isOpen));
+        if (isOpen) caption.focus();
+    }
+
     document.addEventListener("click", event => {
         const badge = event.target.closest(".studio-asset .version-badge");
         const action = event.target.closest("[data-studio-action]");
@@ -485,6 +544,13 @@
                     openVersionGallery(zone.dataset.studioShot, zone.dataset.studioType, badge || action);
                 } else if (action.dataset.studioAction === "upload") {
                     openFileDialog(zone.dataset.studioShot, zone.dataset.studioType);
+                } else if (action.dataset.studioAction === "prompt") {
+                    // The existing prompt modal reads its version from this
+                    // original button, including after an upload or promotion.
+                    const promptButton = zone.querySelector(".prompt-button");
+                    if (promptButton) promptButton.click();
+                } else if (action.dataset.studioAction === "caption") {
+                    toggleCaptionEditor(zone, action);
                 }
                 return;
             }
