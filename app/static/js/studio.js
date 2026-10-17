@@ -228,6 +228,19 @@
         if (bar) bar.style.width = progress + "%";
     }
 
+    /** Keep visible SH001-style numbers in sync with the current shot order.
+     *
+     * Shot IDs remain stable for every upload and historical version. This
+     * updates only the user-facing label on cards and the sidebar navigation.
+     */
+    function refreshStudioOrderLabels() {
+        if (window.StudioOrder) {
+            window.StudioOrder.applyShotOrderLabels(shots, document);
+        }
+    }
+
+    window.refreshStudioOrderLabels = refreshStudioOrderLabels;
+
     /** Reuse the working original renderer and uploads while improving presentation. */
     const originalDropZone = window.createDropZone;
     const originalShotRow = window.createShotRow;
@@ -249,6 +262,7 @@
     if (typeof originalRenderShots === "function") {
         window.renderShots = function (...args) {
             const result = originalRenderShots(...args);
+            refreshStudioOrderLabels();
             refreshStudioOverview();
             return result;
         };
