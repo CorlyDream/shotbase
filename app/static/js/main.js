@@ -833,6 +833,7 @@ function initSortable() {
                     shots.sort((a, b) => shotOrder.indexOf(a.name) - shotOrder.indexOf(b.name));
                     // Update the TOC to reflect the new shot order
                     renderTOC();
+                    window.refreshStudioOrderLabels?.();
                 } else {
                     showNotification(result.error || 'Failed to save order', 'error');
                 }
@@ -1491,6 +1492,10 @@ async function saveDisplayName(shotName, displayName) {
                         : shotName;
                 }
             }
+            // Display names describe the scene; SH001-style labels follow
+            // the current visual order rather than the stable media ID.
+            renderTOC();
+            window.refreshStudioOrderLabels?.();
         } else {
             showNotification(result.error || 'Failed to update display name', 'error');
         }
@@ -1505,7 +1510,7 @@ window.saveDisplayName = saveDisplayName;
 
 function editDisplayName(element, shotName) {
     const currentDisplayName = element.dataset.displayName || '';
-    const newDisplayName = prompt('Enter display name (leave empty to show only SHXXX)', currentDisplayName);
+    const newDisplayName = prompt('分镜描述名称（可选；SH 编号会按排序自动更新，无需手动修改）', currentDisplayName);
     if (newDisplayName === null || newDisplayName === currentDisplayName) {
         return;
     }
