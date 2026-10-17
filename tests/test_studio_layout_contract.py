@@ -38,22 +38,41 @@ class StudioLayoutContractTests(unittest.TestCase):
         self.assertIn('"title first alt audio notes archive"', self.css)
         self.assertIn("#main-interface.studio-compact .studio-overview", self.css)
 
-    def test_compact_first_frame_places_image_left_and_controls_right(self):
-        """First frame should use a side toolbar instead of a small centered thumbnail."""
-        self.assertIn(".studio-asset-first_image.with-caption", self.css)
-        self.assertIn('"image label"', self.css)
-        self.assertIn('"image version"', self.css)
-        self.assertIn('"image prompt"', self.css)
-        self.assertIn('"image caption"', self.css)
-        self.assertIn('"image actions"', self.css)
-        self.assertIn(".studio-asset-first_image .file-preview", self.css)
-        self.assertIn("display: contents;", self.css)
-        self.assertIn("grid-area: image;", self.css)
-        self.assertIn("grid-area: actions;", self.css)
-        self.assertIn("object-fit: contain;", self.css)
-        self.assertIn("object-position: left center;", self.css)
-        # The old 150px height caused wide black bars and should be gone.
-        self.assertNotRegex(self.css, r"\\.studio-asset-first_image \\.preview-thumbnail\\s*\\{[^}]*height:\\s*150px;")
+    def test_compact_first_frame_uses_vertical_image_canvas_and_one_line_footer(self):
+        """Compact frame must put the full 16:9 image between a header and a footer."""
+        self.assertIn("#main-interface.studio-compact .studio-asset-first_image.with-caption", self.css)
+        self.assertIn("flex-direction: column;", self.css)
+        self.assertIn("#main-interface.studio-compact .studio-asset-first_image .file-preview", self.css)
+        self.assertIn("#main-interface.studio-compact .studio-asset-first_image .studio-asset-actions", self.css)
+        self.assertIn("#main-interface.studio-compact .studio-asset-first_image .studio-current-version", self.css)
+        self.assertNotIn('grid-template-areas:\\n        "image label"', self.css)
+        image_rule = re.search(
+            r"#main-interface\\.studio-compact \\.studio-asset-first_image "
+            r"\\.file-preview > \\.preview-thumbnail\\s*\\{([^}]+)\\}",
+            self.css,
+        )
+        self.assertIsNotNone(image_rule)
+        self.assertRegex(image_rule.group(1), r"width:\\s*100%;")
+        self.assertRegex(image_rule.group(1), r"height:\\s*auto;")
+        self.assertRegex(image_rule.group(1), r"aspect-ratio:\\s*16\\s*/\\s*9;")
+        self.assertRegex(image_rule.group(1), r"object-fit:\\s*contain;")
+        self.assertNotRegex(image_rule.group(1), r"max-height:\\s*[0-9]+px;")
+
+    def test_compact_first_frame_actions_keep_existing_media_workflows(self):
+        """Hide the default caption until requested; show useful footer controls."""
+        self.assertIn('"studio-current-version"', self.js)
+        self.assertIn('"查看版本"', self.js)
+        self.assertIn('"提示词"', self.js)
+        self.assertIn('"备注"', self.js)
+        self.assertIn('captionAction.dataset.studioAction = "caption";', self.js)
+        self.assertIn('promptAction.dataset.studioAction = "prompt";', self.js)
+        self.assertIn("function toggleCaptionEditor(", self.js)
+        self.assertIn("promptButton.click()", self.js)
+        self.assertIn('classList.toggle("studio-caption-visible")', self.js)
+        self.assertIn(".studio-caption-visible > .asset-caption-input", self.css)
+        # Only the compact view should hide the original media-overlay controls.
+        self.assertIn("#main-interface.studio-compact .studio-asset-first_image", self.css)
+
 
     def test_prior_compact_setting_is_migrated_to_new_comfortable_view(self):
         """Do not surprise existing users with a much denser layout on upgrade."""
