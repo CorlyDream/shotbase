@@ -284,6 +284,29 @@ body.studio-design {
     letter-spacing: -.015em;
 }
 
+/* Automatic position numbers remain prominent; user-provided scene titles
+ * remain secondary. Stable media IDs are available via the title tooltip.
+ */
+.studio-design .studio-shot-card .shot-name .studio-order-number {
+    display: block;
+    font-size: inherit;
+    font-weight: 740;
+    color: var(--studio-text);
+    font-variant-numeric: tabular-nums;
+    line-height: 1.25;
+}
+
+.studio-design .studio-shot-card .shot-name .studio-order-subtitle {
+    display: block;
+    max-width: 100%;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.4;
+    color: var(--studio-muted);
+    overflow-wrap: anywhere;
+    margin-top: 4px;
+}
+
 .studio-design .shot-name .shot-code {
     margin-top: 5px;
     color: var(--studio-muted);
