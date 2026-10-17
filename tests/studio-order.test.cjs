@@ -2,6 +2,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("node:path");
+const fs = require("node:fs");
 
 /**
  * Load shot numbering as a Node module. The browser uses the same implementation
@@ -125,4 +126,20 @@ test("reorder updates cards and sidebar labels while preserving stable DOM IDs",
     assert.equal(ui.items.get("SH004").children[0].textContent, "SH003");
     assert.equal(ui.rows.get("SH004").title.dataset.displayName, "SH003");
     assert.equal(ui.rows.size, 3);
+});
+
+
+test("the page and all reorder/edit paths refresh the position-derived labels", () => {
+    const root = path.join(__dirname, "..");
+    const html = fs.readFileSync(path.join(root, "app/templates/index.html"), "utf8");
+    const main = fs.readFileSync(path.join(root, "app/static/js/main.js"), "utf8");
+    const studio = fs.readFileSync(path.join(root, "app/static/js/studio.js"), "utf8");
+    assert.ok(
+        html.indexOf("js/studio-order.js") >= 0 &&
+        html.indexOf("js/studio-order.js") < html.indexOf("js/studio.js"),
+        "the numbering module must load before studio.js"
+    );
+    assert.match(studio, /StudioOrder\.applyShotOrderLabels\(shots, document\)/);
+    assert.match(main, /renderTOC\(\);\s*window\.refreshStudioOrderLabels\?\.\(\)/);
+    assert.match(main, /saveDisplayName\([\s\S]*?renderTOC\(\);\s*window\.refreshStudioOrderLabels\?\.\(\)/);
 });
