@@ -45,18 +45,18 @@ class StudioLayoutContractTests(unittest.TestCase):
         self.assertIn("#main-interface.studio-compact .studio-asset-first_image .file-preview", self.css)
         self.assertIn("#main-interface.studio-compact .studio-asset-first_image .studio-asset-actions", self.css)
         self.assertIn("#main-interface.studio-compact .studio-asset-first_image .studio-current-version", self.css)
-        self.assertNotIn('grid-template-areas:\\n        "image label"', self.css)
+        self.assertNotIn('grid-template-areas:\n        "image label"', self.css)
         image_rule = re.search(
-            r"#main-interface\\.studio-compact \\.studio-asset-first_image "
-            r"\\.file-preview > \\.preview-thumbnail\\s*\\{([^}]+)\\}",
+            r"#main-interface\.studio-compact \.studio-asset-first_image "
+            r"\.file-preview > \.preview-thumbnail\s*\{([^}]+)\}",
             self.css,
         )
         self.assertIsNotNone(image_rule)
-        self.assertRegex(image_rule.group(1), r"width:\\s*100%;")
-        self.assertRegex(image_rule.group(1), r"height:\\s*auto;")
-        self.assertRegex(image_rule.group(1), r"aspect-ratio:\\s*16\\s*/\\s*9;")
-        self.assertRegex(image_rule.group(1), r"object-fit:\\s*contain;")
-        self.assertNotRegex(image_rule.group(1), r"max-height:\\s*[0-9]+px;")
+        self.assertRegex(image_rule.group(1), r"width:\s*100%;")
+        self.assertRegex(image_rule.group(1), r"height:\s*auto;")
+        self.assertRegex(image_rule.group(1), r"aspect-ratio:\s*16\s*/\s*9;")
+        self.assertRegex(image_rule.group(1), r"object-fit:\s*contain;")
+        self.assertNotRegex(image_rule.group(1), r"max-height:\s*[0-9]+px;")
 
     def test_compact_first_frame_actions_keep_existing_media_workflows(self):
         """Hide the default caption until requested; show useful footer controls."""
