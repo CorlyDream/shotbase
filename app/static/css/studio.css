@@ -1041,9 +1041,9 @@ body.studio-dialog-open {
 
 #main-interface.studio-compact .shot-row.studio-shot-card {
     grid-template-columns:
-        74px minmax(280px, 1.8fr)
-        minmax(117px, .68fr) minmax(117px, .68fr)
-        minmax(215px, 1.12fr) 36px;
+        74px minmax(300px, 1.5fr)
+        minmax(117px, .82fr) minmax(117px, .82fr)
+        minmax(215px, 1.42fr) 36px;
     grid-template-areas:
         "title first last video notes archive"
         "title first alt audio notes archive";
@@ -1103,13 +1103,123 @@ body.studio-dialog-open {
     gap: 3px;
 }
 
-/* Keep full-resolution images but limit their *displayed* height in the strip. */
-#main-interface.studio-compact .studio-asset-first_image .preview-thumbnail {
-    height: 150px;
+/* A first frame is a 16:9 editing surface, not a full-width thumbnail.
+ * In the compact strip keep the image on the left and group its version,
+ * prompt, caption and upload actions into a slim right-side tool rail.
+ * display:contents preserves the existing DOM hierarchy for upload/version JS.
+ */
+#main-interface.studio-compact .studio-asset-first_image.with-caption {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 124px;
+    grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+    grid-template-areas:
+        "image label"
+        "image version"
+        "image prompt"
+        "image caption"
+        "image actions";
+    align-items: stretch;
+    column-gap: 9px;
+    row-gap: 5px;
+}
+
+#main-interface.studio-compact .studio-asset-first_image .file-preview {
+    display: contents;
+}
+
+#main-interface.studio-compact .studio-asset-first_image .file-preview > .preview-thumbnail {
+    grid-area: image;
+    height: 100%;
     min-height: 0;
-    max-height: 150px;
+    max-height: 216px;
+    width: 100%;
+    max-width: 100%;
     aspect-ratio: 16 / 9;
     object-fit: contain;
+    object-position: left center;
+    align-self: stretch;
+    border: 0;
+    background: transparent;
+}
+
+#main-interface.studio-compact .studio-asset-first_image .studio-asset-label {
+    grid-area: label;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-start;
+    gap: 2px;
+    line-height: 1.35;
+    min-width: 0;
+}
+
+#main-interface.studio-compact .studio-asset-first_image .version-badge {
+    grid-area: version;
+    position: static;
+    justify-self: stretch;
+    align-self: center;
+    width: 100%;
+    border-radius: 6px;
+    text-align: left;
+    padding: 5px 7px;
+    font-size: 11px;
+}
+
+#main-interface.studio-compact .studio-asset-first_image .prompt-button {
+    grid-area: prompt;
+    position: static;
+    justify-self: stretch;
+    align-self: center;
+    width: 100%;
+    text-align: left;
+    padding: 5px 7px;
+    border-radius: 6px;
+    font-size: 0;
+}
+
+#main-interface.studio-compact .studio-asset-first_image .prompt-button::before {
+    content: "P · 提示词";
+    font-size: 11px;
+}
+
+#main-interface.studio-compact .studio-asset-first_image .asset-caption-input {
+    grid-area: caption;
+    width: 100%;
+    align-self: end;
+    padding: 5px 6px;
+    border-radius: 6px;
+}
+
+#main-interface.studio-compact .studio-asset-first_image .studio-asset-actions {
+    grid-area: actions;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-end;
+    width: 100%;
+    gap: 4px;
+    margin: 0;
+}
+
+#main-interface.studio-compact .studio-asset-first_image .studio-action-link {
+    width: 100%;
+    text-align: left;
+    white-space: nowrap;
+    font-size: 11px;
+    line-height: 1.3;
+    padding: 4px 6px;
+    border-radius: 6px;
+    background: rgba(122, 157, 165, .08);
+}
+
+#main-interface.studio-compact .studio-asset-first_image .studio-action-link:hover {
+    background: rgba(122, 157, 165, .18);
+}
+
+/* Preserve a visible upload target when the first frame is still empty. */
+#main-interface.studio-compact .studio-asset-first_image.empty {
+    display: flex;
+    flex-direction: column;
 }
 
 #main-interface.studio-compact .studio-asset:not(.studio-asset-first_image) .preview-thumbnail,
@@ -1219,6 +1329,22 @@ body.studio-dialog-open {
     margin-block: 2px;
 }
 
+/* Keep the side rail useful on narrower laptop displays. */
+@media (max-width: 1360px) and (min-width: 801px) {
+    #main-interface.studio-compact .studio-asset-first_image.with-caption {
+        grid-template-columns: minmax(0, 1fr) 102px;
+        column-gap: 6px;
+    }
+
+    #main-interface.studio-compact .studio-asset-first_image .studio-action-link {
+        font-size: 10px;
+    }
+
+    #main-interface.studio-compact .studio-asset-first_image .file-preview > .preview-thumbnail {
+        max-height: 200px;
+    }
+}
+
 /* Narrow laptops retain the compact strip without squeezing labels to zero. */
 @media (max-width: 1100px) {
     #main-interface.studio-compact .shot-row.studio-shot-card {
@@ -1320,6 +1446,58 @@ body.studio-dialog-open {
     .studio-design .studio-shot-card > .notes-cell { min-height: 220px; }
     .studio-version-header, .studio-version-footer { padding: 17px; }
     .studio-version-items { padding: 15px; }
+}
+
+/* At phone widths a side rail would make the 16:9 frame too small. */
+@media (max-width: 560px) {
+    #main-interface.studio-compact .studio-asset-first_image.with-caption {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 5px;
+    }
+
+    #main-interface.studio-compact .studio-asset-first_image .file-preview {
+        display: flex;
+        position: relative;
+    }
+
+    #main-interface.studio-compact .studio-asset-first_image .file-preview > .preview-thumbnail {
+        height: auto;
+        min-height: 0;
+        max-height: 250px;
+        aspect-ratio: 16 / 9;
+        object-fit: contain;
+        object-position: center;
+    }
+
+    #main-interface.studio-compact .studio-asset-first_image .version-badge {
+        position: absolute;
+        left: 4px;
+        bottom: 4px;
+        width: auto;
+    }
+
+    #main-interface.studio-compact .studio-asset-first_image .prompt-button {
+        position: absolute;
+        right: 4px;
+        bottom: 4px;
+        width: auto;
+    }
+
+    #main-interface.studio-compact .studio-asset-first_image .studio-asset-label {
+        flex-direction: row;
+        justify-content: space-between;
+    }
+
+    #main-interface.studio-compact .studio-asset-first_image .studio-asset-actions {
+        flex-direction: row;
+        justify-content: space-between;
+    }
+
+    #main-interface.studio-compact .studio-asset-first_image .studio-action-link {
+        width: auto;
+    }
 }
 
 @media (max-width: 480px) {
