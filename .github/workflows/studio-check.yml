@@ -22,5 +22,5 @@ jobs:
         run: uv run python -m unittest discover -s tests -v
       - name: Frontend JavaScript syntax
         run: node --check app/static/js/studio.js
-      - name: Script dialog interaction tests
-        run: node --test tests/studio-notes.test.cjs
+      - name: Storyboard interaction tests
+        run: node --test tests/*.test.cjs
