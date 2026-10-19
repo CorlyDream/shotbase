@@ -181,7 +181,9 @@ Environment variables can override config file settings:
 | POST | `/api/shots/rename` | `{old_name, new_name}` | Rename shot + all associated files (including alt_video) |
 | POST | `/api/shots/reorder` | `{shot_order: [...]}` | Persist shot order list |
 | POST | `/api/shots/create-between` | `{after_shot}` | Create shot after given shot (or at top if null) |
-| GET | `/api/shots/thumbnail/<filepath>` | — | Serve thumbnail with strong caching + ETag; generates on-the-fly if missing (lazy) |
+| GET | `/api/shots/versions/<shot_name>/<asset_type>` | — | List existing WIP media versions in the active project with current version; accepts legacy `image` alias |
+| GET | `/api/shots/version-media/<shot_name>/<asset_type>/<version>` | — | Stream a specific WIP version from the active project; supports `image` alias; requires browser cache revalidation |
+| GET | `/api/shots/thumbnail/<filepath>` | — | Serve lazily generated thumbnail + ETag; force revalidation because different projects reuse filenames |
 | POST | `/api/shots/reveal` | `{path}` | Reveal file in OS file browser (Explorer/Finder) |
 | POST | `/api/shots/open-folder` | — | Open current project's shots folder |
 | POST | `/api/shots/open-exports-folder` | — | Open current project's exports folder (creates if missing) |
@@ -201,6 +203,7 @@ Environment variables can override config file settings:
 - **Paths**: All file paths are normalized to POSIX-style forward slashes via `_normalize_path()`
 - **Timestamps**: ISO 8601 format throughout
 - **Backward compat**: `image` asset type maps to `first_image` everywhere; legacy single-image finals still supported
+- **Project-scoped media cache**: Thumbnail, promoted image/video/audio, and WIP media responses use `private, no-cache, must-revalidate` to avoid cross-project stale media; the version list JSON uses `private, no-store`.
 
 ---
 
@@ -405,7 +408,7 @@ Key patterns:
 ## Common Development Tasks
 
 ### Adding a New API Endpoint
-1. Add route handler in `app/routes/shot_routes.py` or `project_routes.py`
+1. Add route handler in `app/routes/shot_routes.py`, `app/routes/version_routes.py` or `project_routes.py`
 2. If it needs shot data, get `ShotManager` via `get_shot_manager(project["path"])`
 3. If it modifies data, call `project_manager.update_project_timestamp(project["path"])` after success
 4. Return `jsonify({"success": True, "data": ...})` or `jsonify({"success": False, "error": "..."})` with appropriate HTTP code
