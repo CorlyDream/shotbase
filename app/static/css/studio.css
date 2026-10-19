@@ -1217,7 +1217,6 @@ body.studio-dialog-open {
     flex: 0 0 auto;
     align-items: center;
     justify-content: flex-start;
-    flex-wrap: nowrap;
     width: 100%;
     min-width: 0;
     margin: 0;
@@ -1234,8 +1233,6 @@ body.studio-dialog-open {
     border: 0;
     border-radius: 5px;
     background: transparent;
-    font-size: 11px;
-    line-height: 1.3;
     white-space: nowrap;
     color: var(--studio-muted);
     cursor: pointer;
@@ -1423,7 +1420,6 @@ body.studio-dialog-open {
             "last notes"
             "alt audio";
         grid-template-rows: auto;
-        padding: 9px;
     }
 
     #main-interface.studio-compact .studio-asset-first_image .preview-thumbnail {
@@ -1527,8 +1523,6 @@ body.studio-design.light {
     --studio-muted: #627782;
     --studio-amber: #a8641c;
     --studio-focus: #277f86;
-    background: var(--studio-bg);
-    color: var(--studio-text);
 }
 
 .studio-design.light .header { background: #fff; }

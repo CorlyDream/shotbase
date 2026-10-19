@@ -386,18 +386,25 @@
     /** Fetch the real version list; ignore responses from closed/replaced galleries. */
     async function reloadVersionGallery(session = gallery) {
         if (!session) return;
+        const requestId = session.requestId = (session.requestId || 0) + 1;
         const url = "/api/shots/versions/" +
             encodeURIComponent(session.shot) + "/" + encodeURIComponent(session.assetType);
-        const response = await fetch(url, {cache: "no-store"});
-        const result = await response.json();
-        if (!response.ok || !result.success) {
-            throw new Error(result.error || "读取历史版本失败");
+        const isLatestRequest = () => gallery === session && isCurrentProject(session) &&
+            session.requestId === requestId;
+        try {
+            const response = await fetch(url, {cache: "no-store"});
+            const result = await response.json();
+            // Matching shot names alone do not identify a live gallery request.
+            if (!isLatestRequest()) return;
+            if (!response.ok || !result.success) {
+                throw new Error(result.error || "读取历史版本失败");
+            }
+            session.data = result.data;
+            renderGalleryItems(result.data);
+        } catch (error) {
+            // Superseded HTTP, transport and JSON failures are equally stale.
+            if (isLatestRequest()) throw error;
         }
-        // Matching shot names are insufficient: a gallery may have been closed
-        // and reopened (or the entire project switched) while awaiting HTTP.
-        if (gallery !== session || !isCurrentProject(session)) return;
-        session.data = result.data;
-        renderGalleryItems(result.data);
     }
 
     /** Promote a WIP version using a stable shot, type and project identity. */
@@ -434,12 +441,16 @@
             }
             refreshStudioOverview();
 
-            // Keep another gallery open and untouched. A closed gallery has no
-            // active data to mutate, but the underlying shot was still updated.
-            if (gallery === session && session.data) {
-                session.data.current_version = version;
-                renderGalleryItems(session.data);
-                showNotification("已使用 v" + String(version).padStart(3, "0"));
+            // A reopened gallery for this same asset must also reflect completion.
+            // Reloading invalidates any older list request still in flight, while
+            // unrelated shots, asset types and projects remain untouched.
+            const active = gallery;
+            if (active && active.projectPath === session.projectPath &&
+                active.shot === shot && active.assetType === assetType) {
+                await reloadVersionGallery(active);
+                if (gallery === active && isCurrentProject(active)) {
+                    showNotification("已使用 v" + String(version).padStart(3, "0"));
+                }
             }
         } catch (error) {
             if (gallery === session && isCurrentProject(session)) {

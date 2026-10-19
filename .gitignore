@@ -9,3 +9,6 @@ Tests/
 .env
 .venv
 uv.lock
+
+# Disposable real-browser QA artifacts
+browser-test-results/

@@ -83,7 +83,7 @@ function harness() {
         {name: "SH001", video: {max_version: 2, current_version: 1}, first_image: {max_version: 0}},
         {name: "SH002", video: {max_version: 2, current_version: 1}, first_image: {max_version: 0}}
     ];
-    const layouts = new Map();
+    const currentVersions = new Map();
     const lists = new Map([
         ["SH001", [1, 2]],
         ["SH002", [1, 2]]
@@ -131,7 +131,7 @@ function harness() {
                     data: {
                         shot_name: shot,
                         asset_type: "video",
-                        current_version: 1,
+                        current_version: currentVersions.get(shot) || 1,
                         versions: items.map(version => ({
                             version,
                             url: "/media/" + shot + "/" + version
@@ -205,6 +205,7 @@ function harness() {
     function finishPromotion(index = 0) {
         const pending = promotions[index];
         assert.ok(pending, "expected an in-flight promotion");
+        currentVersions.set(pending.payload.shot_name, pending.payload.version);
         pending.resolve({
             ok: true,
             json: async () => ({
@@ -302,3 +303,100 @@ test("uploading the first image or video updates overview without a full rerende
     assert.equal(h.nodes.get("studio-count-videos").textContent, "1");
     assert.equal(h.nodes.get("studio-progress-label").textContent, "50%");
 });
+
+
+test("reopening the same asset during promotion refreshes the visible current selection", async () => {
+    const h = harness();
+    h.click("versions", "SH001");
+    await h.tick();
+    const pending = h.chooseSecond();
+    h.close();
+    h.click("versions", "SH001");
+    await h.tick();
+    assert.equal(h.container.children[0].children[2].children[0].disabled, true);
+    h.finishPromotion();
+    await pending;
+    await h.tick();
+
+    assert.equal(h.modal.hidden, false);
+    assert.equal(h.shots[0].video.current_version, 2);
+    assert.equal(h.container.children[0].children[2].children[0].disabled, false);
+    assert.equal(h.container.children[1].children[2].children[0].disabled, true);
+    assert.equal(h.container.children[1].children[1].children[1].textContent, "当前使用");
+});
+
+test("a late pre-promotion list cannot revert the reopened gallery selection", async () => {
+    const h = harness();
+    h.click("versions", "SH001");
+    await h.tick();
+    const pending = h.chooseSecond();
+    const originalFetch = h.ctx.fetch;
+    let releaseOldList;
+    h.ctx.fetch = async (url, options) => {
+        const response = await originalFetch(url, options);
+        if (!url.startsWith("/api/shots/versions/")) return response;
+        const snapshot = await response.json();
+        h.ctx.fetch = originalFetch;
+        return new Promise(resolve => {
+            releaseOldList = () => resolve({ok: true, json: async () => snapshot});
+        });
+    };
+    h.close();
+    h.click("versions", "SH001");
+    await h.tick();
+    h.finishPromotion();
+    await pending;
+    assert.equal(h.container.children[1].children[2].children[0].disabled, true);
+    releaseOldList();
+    await h.tick();
+    assert.equal(h.container.children[0].children[2].children[0].disabled, false);
+    assert.equal(h.container.children[1].children[2].children[0].disabled, true);
+});
+
+test("completion does not refresh a different asset on the same shot", async () => {
+    const h = harness();
+    h.click("versions", "SH001", "video");
+    await h.tick();
+    const pending = h.chooseSecond();
+    h.close();
+    h.click("versions", "SH001", "audio");
+    await h.tick();
+    const cards = h.container.children;
+    h.finishPromotion();
+    await pending;
+    assert.equal(h.container.children, cards);
+    assert.equal(h.container.children[0].children[2].children[0].disabled, true);
+});
+
+for (const failure of ["HTTP error", "network rejection", "JSON rejection"]) {
+    test(`a stale ${failure} cannot append an error to the refreshed gallery`, async () => {
+        const h = harness();
+        h.click("versions", "SH001");
+        await h.tick();
+        const pending = h.chooseSecond();
+        const originalFetch = h.ctx.fetch;
+        let failOldList;
+        h.ctx.fetch = (url, options) => {
+            h.ctx.fetch = originalFetch;
+            return new Promise((resolve, reject) => {
+                failOldList = () => {
+                    if (failure === "network rejection") return reject(new Error("stale network failure"));
+                    resolve({ok: false, json: async () => {
+                        if (failure === "JSON rejection") throw new Error("stale JSON failure");
+                        return {success: false, error: "stale failure"};
+                    }});
+                };
+            });
+        };
+        h.close();
+        h.click("versions", "SH001");
+        await h.tick();
+        h.finishPromotion();
+        await pending;
+        failOldList();
+        await h.tick();
+        assert.equal(h.container.children.length, 2);
+        assert.equal(h.notifications.some(item => item.type === "error"), false);
+        assert.equal(h.container.children[1].children[2].children[0].disabled, true);
+    });
+}
