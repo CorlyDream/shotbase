@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 from flask import Flask
 
+from app.routes.shot_routes import shot_bp
 from app.routes.version_routes import find_asset_versions, version_bp
 
 
@@ -32,6 +33,7 @@ class VersionGalleryTests(unittest.TestCase):
         self.app.config["TESTING"] = True
         self.app.config["PROJECT_MANAGER"] = _ProjectManager(str(self.project))
         self.app.register_blueprint(version_bp, url_prefix="/api/shots")
+        self.app.register_blueprint(shot_bp, url_prefix="/api/shots")
         self.client = self.app.test_client()
 
     def tearDown(self):
@@ -129,6 +131,65 @@ class VersionGalleryTests(unittest.TestCase):
             manager.return_value.get_current_version.return_value = 1
             response = self.client.get("/api/shots/versions/SH002/first_image")
         self.assertEqual(response.headers.get("Cache-Control"), "private, no-store")
+
+    def test_all_promoted_media_requires_project_revalidation(self):
+        """Main image, video and audio previews are scoped to the active project."""
+        media_paths = {
+            "first_image": self.project / "shots" / "latest_images" / "SH002_first.png",
+            "last_image": self.project / "shots" / "latest_images" / "SH002_last.png",
+            "video": self.project / "shots" / "latest_videos" / "SH002.mp4",
+            "alt_video": self.project / "shots" / "latest_videos" / "SH002_alt.mp4",
+            "audio": self.project / "shots" / "latest_audio" / "SH002_audio.mp3",
+        }
+        for media in media_paths.values():
+            media.parent.mkdir(parents=True, exist_ok=True)
+            media.write_bytes(b"asset-data")
+        info = {slot: {"file": str(file_path)} for slot, file_path in media_paths.items()}
+        with patch("app.routes.shot_routes.get_shot_manager") as manager:
+            manager.return_value.get_shot_info.return_value = info
+            for route in (
+                "/api/shots/image/SH002/first_image",
+                "/api/shots/image/SH002/last_image",
+                "/api/shots/video/SH002",
+                "/api/shots/video/SH002?type=alt_video",
+                "/api/shots/audio/SH002",
+            ):
+                response = self.client.get(route)
+                self.assertEqual(response.status_code, 200, route)
+                self.assertEqual(
+                    response.headers["Cache-Control"],
+                    "private, no-cache, must-revalidate",
+                    route,
+                )
+                response.close()
+
+    def test_cached_thumbnails_must_revalidate_after_switching_projects(self):
+        """A reused thumbnail URL cannot serve project A's image inside project B."""
+        thumbnail_name = "SH002_SH002_first_thumb.jpg"
+        first_file = self.project / ".shotbuddy" / "thumbnails" / thumbnail_name
+        first_file.parent.mkdir(parents=True, exist_ok=True)
+        first_file.write_bytes(b"first-thumb")
+        first = self.client.get("/api/shots/thumbnail/" + thumbnail_name)
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(first.data, b"first-thumb")
+        self.assertEqual(first.headers["Cache-Control"], "private, no-cache, must-revalidate")
+        etag = first.headers["ETag"]
+        first.close()
+
+        new_project = self.project / "other-project"
+        second_file = new_project / ".shotbuddy" / "thumbnails" / thumbnail_name
+        second_file.parent.mkdir(parents=True, exist_ok=True)
+        second_file.write_bytes(b"second-thumb")
+        self.app.config["PROJECT_MANAGER"].path = str(new_project)
+
+        second = self.client.get(
+            "/api/shots/thumbnail/" + thumbnail_name,
+            headers={"If-None-Match": etag},
+        )
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(second.data, b"second-thumb")
+        self.assertEqual(second.headers["Cache-Control"], "private, no-cache, must-revalidate")
+        second.close()
 
     def test_rejects_unsafe_shot_names_and_unknown_asset_types(self):
         """Reject traversal and unsupported locations before touching project files."""
