@@ -19,6 +19,19 @@
     const ASSET_TYPES = Object.keys(LABELS);
     let gallery = null;
     let lastGalleryTrigger = null;
+    const pendingPromotions = new Set();
+
+    /** Identify the active project without assuming the setup screen has loaded one. */
+    function studioProjectPath() {
+        return typeof currentProject !== "undefined" && currentProject
+            ? currentProject.path
+            : null;
+    }
+
+    /** A completed async request may only update cards from its original project. */
+    function isCurrentProject(session) {
+        return session && session.projectPath === studioProjectPath();
+    }
 
     /** Escape file/shot text when displaying it in HTML-generated labels. */
     function makeElement(tag, className, text) {
@@ -246,6 +259,7 @@
     const originalShotRow = window.createShotRow;
     const originalRenderShots = window.renderShots;
     const originalUpdateDropZone = window.updateDropZoneForShot;
+    const originalReplaceDropZone = window.replaceDropZoneForShot;
 
     if (typeof originalDropZone === "function") {
         window.createDropZone = function (shot, assetType) {
@@ -279,10 +293,31 @@
         };
     }
 
+    // First uploads use replaceDropZoneForShot rather than updateDropZoneForShot.
+    // Keep production counters accurate for both upload paths.
+    if (typeof originalReplaceDropZone === "function") {
+        window.replaceDropZoneForShot = function (shotName, assetType, shotData) {
+            const result = originalReplaceDropZone(shotName, assetType, shotData);
+            refreshStudioOverview();
+            return result;
+        };
+    }
+
+    /** Pause and release all history videos/audio before hiding or replacing them. */
+    function stopGalleryMedia() {
+        const container = document.getElementById("studio-version-items");
+        container.querySelectorAll("audio, video").forEach(media => {
+            media.pause();
+            media.removeAttribute("src");
+            media.load();
+        });
+    }
+
     /** Display a clear, selectable card for each existing version of an asset. */
     function renderGalleryItems(data) {
         const container = document.getElementById("studio-version-items");
         const summary = document.getElementById("studio-version-subtitle");
+        stopGalleryMedia();
         container.replaceChildren();
 
         const versions = data.versions || [];
@@ -348,53 +383,70 @@
         });
     }
 
-    /** Fetch the real WIP version list rather than assuming versions are contiguous. */
-    async function reloadVersionGallery() {
-        if (!gallery) return;
-        const requestId = gallery.shot + "/" + gallery.assetType;
+    /** Fetch the real version list; ignore responses from closed/replaced galleries. */
+    async function reloadVersionGallery(session = gallery) {
+        if (!session) return;
         const url = "/api/shots/versions/" +
-            encodeURIComponent(gallery.shot) + "/" + encodeURIComponent(gallery.assetType);
-        const response = await fetch(url);
+            encodeURIComponent(session.shot) + "/" + encodeURIComponent(session.assetType);
+        const response = await fetch(url, {cache: "no-store"});
         const result = await response.json();
         if (!response.ok || !result.success) {
             throw new Error(result.error || "读取历史版本失败");
         }
-        if (!gallery || gallery.shot + "/" + gallery.assetType !== requestId) return;
-        gallery.data = result.data;
+        // Matching shot names are insufficient: a gallery may have been closed
+        // and reopened (or the entire project switched) while awaiting HTTP.
+        if (gallery !== session || !isCurrentProject(session)) return;
+        session.data = result.data;
         renderGalleryItems(result.data);
     }
 
-    /** Promote an existing version, refresh its card and leave WIP files untouched. */
+    /** Promote a WIP version using a stable shot, type and project identity. */
     async function promoteVersion(version, button) {
-        if (!gallery || button.disabled) return;
+        const session = gallery;
+        if (!session || button.disabled) return;
+        const {shot, assetType} = session;
+        const promotionKey = session.projectPath + "/" + shot + "/" + assetType;
+        if (pendingPromotions.has(promotionKey)) return;
+
+        pendingPromotions.add(promotionKey);
         button.disabled = true;
         try {
             const response = await fetch("/api/shots/promote", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    shot_name: gallery.shot,
-                    asset_type: gallery.assetType,
-                    version
-                })
+                body: JSON.stringify({shot_name: shot, asset_type: assetType, version})
             });
             const result = await response.json();
             if (!response.ok || !result.success) {
                 throw new Error(result.error || "版本切换失败");
             }
+            // Never apply data from the previous project to the new project's
+            // shot list, even when both projects contain an SH001 folder.
+            if (!isCurrentProject(session)) return;
+            if (result.data && result.data.name && result.data.name !== shot) {
+                throw new Error("返回的镜头与请求不一致");
+            }
 
-            const index = shots.findIndex(shot => shot.name === gallery.shot);
+            const index = shots.findIndex(item => item.name === shot);
             if (index >= 0) shots[index] = result.data;
-            // The existing renderer keeps the familiar thumbnail / prompt UI in sync.
             if (typeof window.replaceDropZoneForShot === "function") {
-                window.replaceDropZoneForShot(gallery.shot, gallery.assetType, result.data);
+                window.replaceDropZoneForShot(shot, assetType, result.data);
             }
             refreshStudioOverview();
-            gallery.data.current_version = version;
-            renderGalleryItems(gallery.data);
-            showNotification("已使用 v" + String(version).padStart(3, "0"));
+
+            // Keep another gallery open and untouched. A closed gallery has no
+            // active data to mutate, but the underlying shot was still updated.
+            if (gallery === session && session.data) {
+                session.data.current_version = version;
+                renderGalleryItems(session.data);
+                showNotification("已使用 v" + String(version).padStart(3, "0"));
+            }
         } catch (error) {
-            showNotification(error.message || "版本切换失败", "error");
+            if (gallery === session && isCurrentProject(session)) {
+                showNotification(error.message || "版本切换失败", "error");
+            }
+        } finally {
+            pendingPromotions.delete(promotionKey);
             button.disabled = false;
         }
     }
@@ -402,19 +454,22 @@
     /** Open the version gallery from the visible management button or badge. */
     async function openVersionGallery(shot, assetType, trigger) {
         lastGalleryTrigger = trigger || document.activeElement;
-        gallery = {shot, assetType, data: null};
+        const session = {shot, assetType, projectPath: studioProjectPath(), data: null};
+        gallery = session;
         const modal = document.getElementById("studio-version-modal");
         document.getElementById("studio-version-title").textContent =
             shot + " · " + LABELS[assetType] + "版本";
         document.getElementById("studio-version-subtitle").textContent = "正在读取历史版本…";
+        stopGalleryMedia();
         document.getElementById("studio-version-items").replaceChildren();
         modal.hidden = false;
         document.body.classList.add("studio-dialog-open");
         document.getElementById("studio-version-close").focus();
 
         try {
-            await reloadVersionGallery();
+            await reloadVersionGallery(session);
         } catch (error) {
+            if (gallery !== session || !isCurrentProject(session)) return;
             const items = document.getElementById("studio-version-items");
             items.appendChild(makeElement("p", "studio-gallery-empty", error.message));
             showNotification(error.message || "读取历史版本失败", "error");
@@ -424,6 +479,7 @@
     /** Close dialog and return keyboard focus to the button that opened it. */
     function closeVersionGallery() {
         const modal = document.getElementById("studio-version-modal");
+        stopGalleryMedia();
         modal.hidden = true;
         document.body.classList.remove("studio-dialog-open");
         gallery = null;
@@ -621,15 +677,16 @@
     document.getElementById("studio-version-file").addEventListener("change", async event => {
         const file = event.target.files && event.target.files[0];
         if (!file || !gallery) return;
-        const shot = gallery.shot;
-        const assetType = gallery.assetType;
+        const session = gallery;
+        const shot = session.shot;
+        const assetType = session.assetType;
         const uploadButton = document.getElementById("studio-version-upload");
         uploadButton.disabled = true;
         uploadButton.textContent = "正在上传…";
         try {
             await uploadFile(file, shot, assetType);
-            if (gallery && gallery.shot === shot && gallery.assetType === assetType) {
-                await reloadVersionGallery();
+            if (gallery === session && isCurrentProject(session)) {
+                await reloadVersionGallery(session);
             }
         } catch (error) {
             showNotification(error.message || "上传失败", "error");
