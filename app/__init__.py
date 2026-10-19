@@ -20,9 +20,11 @@ def create_app():
 
     from app.routes.project_routes import project_bp
     from app.routes.shot_routes import shot_bp
+    from app.routes.version_routes import version_bp
 
     # Register blueprints with appropriate prefixes
     app.register_blueprint(project_bp, url_prefix='/')
     app.register_blueprint(shot_bp, url_prefix="/api/shots")
+    app.register_blueprint(version_bp, url_prefix="/api/shots")
 
     return app

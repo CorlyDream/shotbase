@@ -1,0 +1,232 @@
+"""Regression tests for the visual version gallery's filesystem and HTTP APIs."""
+
+import tempfile
+import unittest
+from pathlib import Path
+from unittest.mock import patch
+
+from flask import Flask
+
+from app.routes.shot_routes import shot_bp
+from app.routes.version_routes import find_asset_versions, version_bp
+
+
+class _ProjectManager:
+    """Minimal active-project provider for the version blueprint tests."""
+
+    def __init__(self, path):
+        self.path = path
+
+    def get_current_project(self):
+        """Return the same active-project shape as ShotBase's ProjectManager."""
+        return {"path": self.path}
+
+
+class VersionGalleryTests(unittest.TestCase):
+    """Exercise version listing, media serving, and filename restrictions."""
+
+    def setUp(self):
+        """Create a disposable ShotBase-style project and Flask test client."""
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.project = Path(self.temp_dir.name)
+        self.app = Flask(__name__)
+        self.app.config["TESTING"] = True
+        self.app.config["PROJECT_MANAGER"] = _ProjectManager(str(self.project))
+        self.app.register_blueprint(version_bp, url_prefix="/api/shots")
+        self.app.register_blueprint(shot_bp, url_prefix="/api/shots")
+        self.client = self.app.test_client()
+
+    def tearDown(self):
+        """Remove temporary video/image files after each test."""
+        self.temp_dir.cleanup()
+
+    def write_version(self, folder, filename, content=b"test-media"):
+        """Create a version file within SH002 for predictable test fixtures."""
+        target = self.project / "shots" / "wip" / "SH002" / folder / filename
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(content)
+        return target
+
+    def test_scans_numeric_versions_and_skips_non_media_files(self):
+        """Return actual files in numeric order, including gaps in numbering."""
+        self.write_version("images", "SH002_first_v003.png")
+        self.write_version("images", "SH002_first_v001.png")
+        self.write_version("images", "SH002_first_v002_image_prompt.txt")
+        self.write_version("images", "SH002_last_v001.png")
+
+        items = find_asset_versions(self.project, "SH002", "first_image")
+        self.assertEqual([version for version, _ in items], [1, 3])
+        self.assertEqual([path.name for _, path in items], [
+            "SH002_first_v001.png",
+            "SH002_first_v003.png",
+        ])
+
+    def test_legacy_first_image_names_remain_visible(self):
+        """Prefer canonical filenames when legacy and new names share a version."""
+        self.write_version("images", "SH002_v001.jpg")
+        self.write_version("images", "SH002_first_v001.png")
+
+        items = find_asset_versions(self.project, "SH002", "first_image")
+        self.assertEqual(items[0][1].name, "SH002_first_v001.png")
+
+    def test_video_and_alternative_video_are_separate(self):
+        """Do not show alternative clips in the primary video version gallery."""
+        self.write_version("videos", "SH002_v001.mp4")
+        self.write_version("videos", "SH002_alt_v001.mp4")
+        self.assertEqual(len(find_asset_versions(self.project, "SH002", "video")), 1)
+        self.assertEqual(len(find_asset_versions(self.project, "SH002", "alt_video")), 1)
+
+    def test_legacy_image_alias_lists_and_streams_first_frame(self):
+        """Old clients using image must see the same versions as first_image."""
+        self.write_version("images", "SH002_first_v001.png", b"frame-a")
+        self.write_version("images", "SH002_v002.jpg", b"frame-b")
+
+        canonical = find_asset_versions(self.project, "SH002", "first_image")
+        legacy = find_asset_versions(self.project, "SH002", "image")
+        self.assertEqual(legacy, canonical)
+
+        with patch("app.routes.version_routes.get_shot_manager") as manager:
+            manager.return_value.get_current_version.return_value = 2
+            response = self.client.get("/api/shots/versions/SH002/image")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["data"]["asset_type"], "first_image")
+        self.assertEqual([item["version"] for item in response.get_json()["data"]["versions"]], [1, 2])
+        self.assertEqual(
+            response.get_json()["data"]["versions"][0]["url"],
+            "/api/shots/version-media/SH002/first_image/1",
+        )
+
+        media = self.client.get("/api/shots/version-media/SH002/image/2")
+        self.assertEqual(media.status_code, 200)
+        self.assertEqual(media.data, b"frame-b")
+
+    def test_project_scoped_media_must_revalidate_and_not_reuse_old_project(self):
+        """The same URL in two projects must not expose cached media from project A."""
+        self.write_version("images", "SH002_first_v001.png", b"project-a")
+        first = self.client.get("/api/shots/version-media/SH002/first_image/1")
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(first.data, b"project-a")
+        self.assertEqual(first.headers["Cache-Control"], "private, no-cache, must-revalidate")
+        self.assertIsNotNone(first.headers.get("ETag"))
+
+        project_b = self.project / "project-b"
+        other = project_b / "shots" / "wip" / "SH002" / "images" / "SH002_first_v001.png"
+        other.parent.mkdir(parents=True)
+        other.write_bytes(b"project-b")
+        self.app.config["PROJECT_MANAGER"].path = str(project_b)
+
+        followup = self.client.get(
+            "/api/shots/version-media/SH002/first_image/1",
+            headers={"If-None-Match": first.headers["ETag"]},
+        )
+        self.assertEqual(followup.status_code, 200)
+        self.assertEqual(followup.data, b"project-b")
+        self.assertEqual(followup.headers["Cache-Control"], "private, no-cache, must-revalidate")
+
+    def test_version_metadata_is_not_reused_across_projects(self):
+        """Gallery contents are project specific and must not be stored in caches."""
+        self.write_version("images", "SH002_first_v001.png")
+        with patch("app.routes.version_routes.get_shot_manager") as manager:
+            manager.return_value.get_current_version.return_value = 1
+            response = self.client.get("/api/shots/versions/SH002/first_image")
+        self.assertEqual(response.headers.get("Cache-Control"), "private, no-store")
+
+    def test_all_promoted_media_requires_project_revalidation(self):
+        """Main image, video and audio previews are scoped to the active project."""
+        media_paths = {
+            "first_image": self.project / "shots" / "latest_images" / "SH002_first.png",
+            "last_image": self.project / "shots" / "latest_images" / "SH002_last.png",
+            "video": self.project / "shots" / "latest_videos" / "SH002.mp4",
+            "alt_video": self.project / "shots" / "latest_videos" / "SH002_alt.mp4",
+            "audio": self.project / "shots" / "latest_audio" / "SH002_audio.mp3",
+        }
+        for media in media_paths.values():
+            media.parent.mkdir(parents=True, exist_ok=True)
+            media.write_bytes(b"asset-data")
+        info = {slot: {"file": str(file_path)} for slot, file_path in media_paths.items()}
+        with patch("app.routes.shot_routes.get_shot_manager") as manager:
+            manager.return_value.get_shot_info.return_value = info
+            for route in (
+                "/api/shots/image/SH002/first_image",
+                "/api/shots/image/SH002/last_image",
+                "/api/shots/video/SH002",
+                "/api/shots/video/SH002?type=alt_video",
+                "/api/shots/audio/SH002",
+            ):
+                response = self.client.get(route)
+                self.assertEqual(response.status_code, 200, route)
+                self.assertEqual(
+                    response.headers["Cache-Control"],
+                    "private, no-cache, must-revalidate",
+                    route,
+                )
+                response.close()
+
+    def test_cached_thumbnails_must_revalidate_after_switching_projects(self):
+        """A reused thumbnail URL cannot serve project A's image inside project B."""
+        thumbnail_name = "SH002_SH002_first_thumb.jpg"
+        first_file = self.project / ".shotbuddy" / "thumbnails" / thumbnail_name
+        first_file.parent.mkdir(parents=True, exist_ok=True)
+        first_file.write_bytes(b"first-thumb")
+        first = self.client.get("/api/shots/thumbnail/" + thumbnail_name)
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(first.data, b"first-thumb")
+        self.assertEqual(first.headers["Cache-Control"], "private, no-cache, must-revalidate")
+        etag = first.headers["ETag"]
+        first.close()
+
+        new_project = self.project / "other-project"
+        second_file = new_project / ".shotbuddy" / "thumbnails" / thumbnail_name
+        second_file.parent.mkdir(parents=True, exist_ok=True)
+        second_file.write_bytes(b"second-thumb")
+        self.app.config["PROJECT_MANAGER"].path = str(new_project)
+
+        second = self.client.get(
+            "/api/shots/thumbnail/" + thumbnail_name,
+            headers={"If-None-Match": etag},
+        )
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(second.data, b"second-thumb")
+        self.assertEqual(second.headers["Cache-Control"], "private, no-cache, must-revalidate")
+        second.close()
+
+    def test_rejects_unsafe_shot_names_and_unknown_asset_types(self):
+        """Reject traversal and unsupported locations before touching project files."""
+        with self.assertRaises(ValueError):
+            find_asset_versions(self.project, "../SH002", "first_image")
+        with self.assertRaises(ValueError):
+            find_asset_versions(self.project, "SH002", "notes")
+
+    def test_gallery_endpoint_lists_actual_versions_with_urls(self):
+        """A version gallery returns current selection and routable previews."""
+        self.write_version("images", "SH002_first_v001.png")
+        self.write_version("images", "SH002_first_v003.png")
+        with patch("app.routes.version_routes.get_shot_manager") as mock_manager:
+            mock_manager.return_value.get_current_version.return_value = 3
+            response = self.client.get("/api/shots/versions/SH002/first_image")
+
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()["data"]
+        self.assertEqual(data["current_version"], 3)
+        self.assertEqual([item["version"] for item in data["versions"]], [1, 3])
+        self.assertEqual(
+            data["versions"][1]["url"],
+            "/api/shots/version-media/SH002/first_image/3",
+        )
+
+    def test_media_preview_is_scoped_to_existing_wip_version(self):
+        """Serve known media and return 404 for missing versions."""
+        content = b"synthetic-image-bytes"
+        self.write_version("images", "SH002_first_v001.png", content)
+        response = self.client.get("/api/shots/version-media/SH002/first_image/1")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, content)
+        self.assertEqual(response.headers["X-Content-Type-Options"], "nosniff")
+        self.assertEqual(
+            self.client.get("/api/shots/version-media/SH002/first_image/9").status_code, 404
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()
