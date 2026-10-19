@@ -74,6 +74,62 @@ class VersionGalleryTests(unittest.TestCase):
         self.assertEqual(len(find_asset_versions(self.project, "SH002", "video")), 1)
         self.assertEqual(len(find_asset_versions(self.project, "SH002", "alt_video")), 1)
 
+    def test_legacy_image_alias_lists_and_streams_first_frame(self):
+        """Old clients using image must see the same versions as first_image."""
+        self.write_version("images", "SH002_first_v001.png", b"frame-a")
+        self.write_version("images", "SH002_v002.jpg", b"frame-b")
+
+        canonical = find_asset_versions(self.project, "SH002", "first_image")
+        legacy = find_asset_versions(self.project, "SH002", "image")
+        self.assertEqual(legacy, canonical)
+
+        with patch("app.routes.version_routes.get_shot_manager") as manager:
+            manager.return_value.get_current_version.return_value = 2
+            response = self.client.get("/api/shots/versions/SH002/image")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["data"]["asset_type"], "first_image")
+        self.assertEqual([item["version"] for item in response.get_json()["data"]["versions"]], [1, 2])
+        self.assertEqual(
+            response.get_json()["data"]["versions"][0]["url"],
+            "/api/shots/version-media/SH002/first_image/1",
+        )
+
+        media = self.client.get("/api/shots/version-media/SH002/image/2")
+        self.assertEqual(media.status_code, 200)
+        self.assertEqual(media.data, b"frame-b")
+
+    def test_project_scoped_media_must_revalidate_and_not_reuse_old_project(self):
+        """The same URL in two projects must not expose cached media from project A."""
+        self.write_version("images", "SH002_first_v001.png", b"project-a")
+        first = self.client.get("/api/shots/version-media/SH002/first_image/1")
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(first.data, b"project-a")
+        self.assertEqual(first.headers["Cache-Control"], "private, no-cache, must-revalidate")
+        self.assertIsNotNone(first.headers.get("ETag"))
+
+        project_b = self.project / "project-b"
+        other = project_b / "shots" / "wip" / "SH002" / "images" / "SH002_first_v001.png"
+        other.parent.mkdir(parents=True)
+        other.write_bytes(b"project-b")
+        self.app.config["PROJECT_MANAGER"].path = str(project_b)
+
+        followup = self.client.get(
+            "/api/shots/version-media/SH002/first_image/1",
+            headers={"If-None-Match": first.headers["ETag"]},
+        )
+        self.assertEqual(followup.status_code, 200)
+        self.assertEqual(followup.data, b"project-b")
+        self.assertEqual(followup.headers["Cache-Control"], "private, no-cache, must-revalidate")
+
+    def test_version_metadata_is_not_reused_across_projects(self):
+        """Gallery contents are project specific and must not be stored in caches."""
+        self.write_version("images", "SH002_first_v001.png")
+        with patch("app.routes.version_routes.get_shot_manager") as manager:
+            manager.return_value.get_current_version.return_value = 1
+            response = self.client.get("/api/shots/versions/SH002/first_image")
+        self.assertEqual(response.headers.get("Cache-Control"), "private, no-store")
+
     def test_rejects_unsafe_shot_names_and_unknown_asset_types(self):
         """Reject traversal and unsupported locations before touching project files."""
         with self.assertRaises(ValueError):
