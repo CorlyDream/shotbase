@@ -302,7 +302,9 @@ def serve_thumbnail(filepath):
             # Add strong caching headers
             mtime = thumb_path.stat().st_mtime
             resp.last_modified = datetime.fromtimestamp(mtime)
-            resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+            # Thumbnail names are reused by different projects, so browsers must
+            # revalidate instead of caching them as immutable for one year.
+            resp.headers["Cache-Control"] = "private, no-cache, must-revalidate"
             # Support conditional requests
             resp.add_etag()
             resp.make_conditional(request)
@@ -544,7 +546,7 @@ def serve_video(shot_name):
         # Serve the video file with proper headers
         resp = send_file(str(video_file))
         resp.headers["Content-Disposition"] = f'inline; filename="{video_file.name}"'
-        resp.headers["Cache-Control"] = "public, max-age=3600"
+        resp.headers["Cache-Control"] = "private, no-cache, must-revalidate"
         return resp
     except Exception as e:
         return str(e), 500
@@ -577,7 +579,7 @@ def serve_image(shot_name, asset_type):
         # Serve the image file with proper headers
         resp = send_file(str(image_file))
         resp.headers["Content-Disposition"] = f'inline; filename="{image_file.name}"'
-        resp.headers["Cache-Control"] = "public, max-age=3600"
+        resp.headers["Cache-Control"] = "private, no-cache, must-revalidate"
         return resp
     except Exception as e:
         return str(e), 500
@@ -604,7 +606,7 @@ def serve_audio(shot_name):
 
         resp = send_file(str(audio_file))
         resp.headers["Content-Disposition"] = f'inline; filename="{audio_file.name}"'
-        resp.headers["Cache-Control"] = "public, max-age=3600"
+        resp.headers["Cache-Control"] = "private, no-cache, must-revalidate"
         return resp
     except Exception as e:
         return str(e), 500
