@@ -24,6 +24,11 @@ ASSET_LOCATIONS = {
 }
 
 
+def normalize_asset_type(asset_type):
+    """Use the canonical first-frame slot for the legacy `image` alias."""
+    return "first_image" if asset_type == "image" else asset_type
+
+
 def find_asset_versions(project_path, shot_name, asset_type):
     """Return existing files for one shot/slot, sorted by numeric version.
 
@@ -31,6 +36,7 @@ def find_asset_versions(project_path, shot_name, asset_type):
     legacy first-frame naming convention (SH001_v001.png) remains readable.
     """
     validate_shot_name(shot_name)
+    asset_type = normalize_asset_type(asset_type)
     if asset_type not in ASSET_LOCATIONS:
         raise ValueError("Unsupported asset type")
 
@@ -72,6 +78,7 @@ def list_asset_versions(shot_name, asset_type):
         return jsonify({"success": False, "error": "No current project"}), 400
 
     try:
+        asset_type = normalize_asset_type(asset_type)
         items = find_asset_versions(project_path, shot_name, asset_type)
         max_version = max((version for version, _ in items), default=0)
         manager = get_shot_manager(project_path)
@@ -79,7 +86,7 @@ def list_asset_versions(shot_name, asset_type):
     except ValueError as exc:
         return jsonify({"success": False, "error": str(exc)}), 400
 
-    return jsonify({
+    response = jsonify({
         "success": True,
         "data": {
             "shot_name": shot_name,
@@ -100,6 +107,10 @@ def list_asset_versions(shot_name, asset_type):
             ],
         },
     })
+    # Gallery lists are scoped to the active local project and can change as
+    # files are uploaded, promoted, or the active project changes.
+    response.headers["Cache-Control"] = "private, no-store"
+    return response
 
 
 @version_bp.route("/version-media/<shot_name>/<asset_type>/<int:version>", methods=["GET"])
@@ -110,6 +121,7 @@ def serve_version_media(shot_name, asset_type, version):
         return "No current project", 400
 
     try:
+        asset_type = normalize_asset_type(asset_type)
         versions = find_asset_versions(project_path, shot_name, asset_type)
     except ValueError:
         return "Invalid shot or asset type", 400
@@ -119,6 +131,8 @@ def serve_version_media(shot_name, asset_type, version):
         return "Version not found", 404
 
     response = send_file(file_path, conditional=True)
-    response.headers["Cache-Control"] = "private, max-age=3600"
+    # The same URL can refer to different files after switching projects.
+    # Revalidation preserves conditional GETs but prevents cross-project reuse.
+    response.headers["Cache-Control"] = "private, no-cache, must-revalidate"
     response.headers["X-Content-Type-Options"] = "nosniff"
     return response
