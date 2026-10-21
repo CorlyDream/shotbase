@@ -2,6 +2,7 @@
 
 import json
 import logging
+import os
 from datetime import datetime
 from pathlib import Path
 
@@ -51,12 +52,56 @@ class ProjectManager:
             with self.projects_file.open('w') as f:
                 json.dump(self.projects, f, indent=2)
             logger.info("Saved current project: %s", self.projects.get('current_project'))
+            return True
         except Exception as e:
             logger.warning("Failed to save projects.json: %s", e)
+            return False
 
     def get_last_project_location(self):
         """Get the last location used for project creation"""
         return self.projects.get('last_project_location')
+
+    def get_project_creation_location(self):
+        """Choose an available server-side folder for the next project."""
+        from app.utils import sanitize_path
+
+        current = self.projects.get('current_project')
+        candidates = [
+            self.projects.get('default_project_location'),
+            self.get_last_project_location(),
+            Path(current).parent if current else None,
+            Path.home(),
+        ]
+        for candidate in candidates:
+            if not candidate:
+                continue
+            try:
+                path = sanitize_path(candidate).resolve()
+                if path.is_dir() and os.access(path, os.W_OK | os.X_OK):
+                    return str(path)
+            except (OSError, ValueError):
+                continue
+        return None
+
+    def set_default_project_location(self, location):
+        """Persist a fixed creation folder, or clear it to follow the last location."""
+        from app.utils import sanitize_path
+
+        if not isinstance(location, str):
+            raise ValueError("Default project location must be a path string.")
+        normalized = None
+        if location.strip():
+            path = sanitize_path(location).resolve()
+            if not path.is_dir():
+                raise ValueError("Please select an existing folder on the ShotBase server.")
+            if not os.access(path, os.W_OK | os.X_OK):
+                raise ValueError("The ShotBase server cannot write to this folder.")
+            normalized = str(path)
+        previous = self.projects.get('default_project_location')
+        self.projects['default_project_location'] = normalized
+        if not self.save_projects():
+            self.projects['default_project_location'] = previous
+            raise OSError("Could not save system settings to projects.json.")
 
     def set_last_project_location(self, location):
         """Set the last location used for project creation"""

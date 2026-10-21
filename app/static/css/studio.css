@@ -246,8 +246,7 @@ body.studio-design {
     grid-template-columns: minmax(0, 1.4fr) minmax(0, 1.4fr) minmax(0, .8fr) minmax(0, .8fr) minmax(0, 1.15fr);
     grid-template-areas:
         "title title title title archive"
-        "first first last video notes"
-        "first first alt audio notes";
+        "first first last video notes";
     align-items: stretch;
     gap: 9px;
     padding: 14px;
@@ -338,8 +337,6 @@ body.studio-design {
 .studio-design .studio-asset-first_image { grid-area: first; }
 .studio-design .studio-asset-last_image { grid-area: last; }
 .studio-design .studio-asset-video { grid-area: video; }
-.studio-design .studio-asset-alt_video { grid-area: alt; }
-.studio-design .studio-asset-audio { grid-area: audio; }
 
 .studio-design .drop-zone.studio-asset {
     min-width: 0;
@@ -359,6 +356,12 @@ body.studio-design {
     background: #1b242b;
     overflow: hidden;
     transform: none;
+}
+
+/* Preserve the legacy child positions used by upload handlers. */
+.studio-design .drop-zone.studio-asset-alt_video,
+.studio-design .drop-zone.studio-asset-audio {
+    display: none;
 }
 
 .studio-design .drop-zone.studio-asset:hover {
@@ -1068,9 +1071,8 @@ body.studio-dialog-open {
         minmax(117px, .85fr) minmax(117px, .85fr)
         minmax(215px, 1.42fr) 36px;
     grid-template-areas:
-        "title first last video notes archive"
-        "title first alt audio notes archive";
-    grid-template-rows: repeat(2, minmax(103px, 1fr));
+        "title first last video notes archive";
+    grid-template-rows: auto;
     gap: 7px;
     padding: 10px 12px;
     border-radius: 12px;
@@ -1273,13 +1275,27 @@ body.studio-dialog-open {
     flex-direction: column;
 }
 
-#main-interface.studio-compact .studio-asset:not(.studio-asset-first_image) .preview-thumbnail,
-#main-interface.studio-compact .studio-asset:not(.studio-asset-first_image) .video-thumbnail {
+#main-interface.studio-compact .studio-asset:not(.studio-asset-first_image) .preview-thumbnail:not(.video-thumbnail) {
     height: 55px;
     min-height: 0;
     max-height: 55px;
     aspect-ratio: 16 / 9;
     object-fit: contain;
+}
+
+#main-interface.studio-compact .studio-asset-video .file-preview,
+#main-interface.studio-compact .studio-asset-alt_video .file-preview {
+    flex: 1 1 auto;
+    min-height: 80px;
+}
+
+#main-interface.studio-compact .studio-asset .video-thumbnail {
+    flex: 0 0 auto;
+    width: 100%;
+    height: auto;
+    min-height: 0;
+    max-height: none;
+    aspect-ratio: 16 / 9;
 }
 
 #main-interface.studio-compact .studio-asset .asset-caption-input {
@@ -1403,7 +1419,8 @@ body.studio-dialog-open {
             minmax(190px, 1.05fr);
         grid-template-areas:
             "title first last video notes"
-            "archive first alt audio notes";
+            "archive first last video notes";
+        grid-template-rows: auto 1fr;
         padding: 9px;
         gap: 6px;
     }
@@ -1416,9 +1433,8 @@ body.studio-dialog-open {
         grid-template-areas:
             "title archive"
             "first first"
-            "video notes"
-            "last notes"
-            "alt audio";
+            "last video"
+            "notes notes";
         grid-template-rows: auto;
     }
 
@@ -1445,7 +1461,7 @@ body.studio-dialog-open {
         grid-template-areas:
             "title title title archive"
             "first first video video"
-            "last alt audio notes";
+            "last last notes notes";
     }
     .studio-design .studio-asset-first_image .preview-thumbnail { min-height: 195px; }
     .studio-design .studio-shot-card > .notes-cell { min-height: 150px; }
@@ -1482,8 +1498,7 @@ body.studio-dialog-open {
             "title archive"
             "first first"
             "video video"
-            "last alt"
-            "audio audio"
+            "last last"
             "notes notes";
         padding: 13px;
     }

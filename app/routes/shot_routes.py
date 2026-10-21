@@ -3,6 +3,7 @@ import shutil
 import subprocess
 from datetime import datetime
 from pathlib import Path
+from threading import Lock
 
 from flask import Blueprint, current_app, jsonify, request, send_file
 
@@ -11,6 +12,7 @@ from app.services.file_handler import FileHandler
 from app.services.shot_manager import get_shot_manager
 
 shot_bp = Blueprint('shot', __name__)
+_reorder_lock = Lock()
 
 @shot_bp.route("/", strict_slashes=False, methods=["GET"])
 def get_shots():
@@ -20,9 +22,10 @@ def get_shots():
         if not project:
             return jsonify({"success": False, "error": "No current project"}), 400
 
-        shot_manager = get_shot_manager(project["path"])
-        shots = shot_manager.get_shots()
-        return jsonify({"success": True, "data": shots})
+        with _reorder_lock:
+            shot_manager = get_shot_manager(project["path"])
+            shots = shot_manager.get_shots()
+            return jsonify({"success": True, "data": shots, "order_revision": shot_manager.get_order_revision()})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
@@ -228,7 +231,9 @@ def rename_shot():
 @shot_bp.route("/reorder", methods=["POST"])
 def reorder_shots():
     try:
-        data = request.get_json()
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            return jsonify({"success": False, "error": "Shot order required"}), 400
         shot_order = data.get("shot_order")
 
         if shot_order is None:
@@ -239,13 +244,19 @@ def reorder_shots():
         if not project:
             return jsonify({"success": False, "error": "No current project"}), 400
 
-        shot_manager = get_shot_manager(project["path"])
-        shot_manager.save_shot_order(shot_order)
-
-        # Update project timestamp after successful shot reorder
-        project_manager.update_project_timestamp(project["path"])
-
-        return jsonify({"success": True})
+        # Flask can receive two saves at once; revision checking and moves must be serialized.
+        with _reorder_lock:
+            shot_manager = get_shot_manager(project["path"])
+            if data.get("revision") != shot_manager.get_order_revision():
+                return jsonify({"success": False, "error": "Shot order changed; reload the project before reordering"}), 409
+            renamed = shot_manager.save_shot_order(shot_order)
+            project_manager.update_project_timestamp(project["path"])
+            return jsonify({"success": True, "data": {
+                "shots": shot_manager.get_shots(), "renamed": renamed,
+                "order_revision": shot_manager.get_order_revision(),
+            }})
+    except ValueError as e:
+        return jsonify({"success": False, "error": str(e)}), 400
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
@@ -266,7 +277,7 @@ def create_shot_between():
         # Update project timestamp after successful shot creation
         project_manager.update_project_timestamp(project["path"])
 
-        return jsonify({"success": True, "data": shot_info})
+        return jsonify({"success": True, "data": shot_info, "order_revision": shot_manager.get_order_revision()})
     except ValueError as e:
         return jsonify({"success": False, "error": str(e)}), 400
     except Exception as e:

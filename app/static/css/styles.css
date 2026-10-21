@@ -4,6 +4,16 @@ body.light {
     color: #1a1a1a;
 }
 
+.light #system-settings-error {
+    color: #b42318;
+}
+
+.light #default-project-location {
+    background: #fff;
+    border-color: #ccc;
+    color: #1a1a1a;
+}
+
 .light .dark-button {
     background: #e0e0e0;
     color: #1a1a1a;

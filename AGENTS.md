@@ -7,7 +7,7 @@
 | **Version** | 4.1.0 |
 | **Git Branch** | `main` |
 | **Python Requirement** | ≥3.13.1 |
-| **Default Host:Port** | 127.0.0.1:5001 |
+| **Configured Host:Port** | 192.168.2.4:5001 (only this IPv4 interface) |
 | **Package Manager** | `uv` (do NOT use `pip install`) |
 | **Linter** | ruff (config in pyproject.toml, line-length=120) |
 
@@ -112,13 +112,13 @@ shotbuddy/
    ```bash
    uv run run.py
    ```
-2. Open browser at http://127.0.0.1:5001/ (default)
+2. Open browser at http://192.168.2.4:5001/ (configured address)
 
 ### Configuration
 Server settings can be configured in `shotbuddy.cfg`:
 ```ini
 [server]
-host = 0.0.0.0
+host = 192.168.2.4
 port = 5001
 ```
 
@@ -127,6 +127,12 @@ Environment variables can override config file settings:
 - `SHOTBUDDY_HOST` - Server host (default: `127.0.0.1`)
 - `SHOTBUDDY_PORT` - Server port (default: `5001`)
 - `SHOTBUDDY_DEBUG` - Enable Flask debug mode (set to `1`)
+- `SHOTBUDDY_OPEN_BROWSER` - Open browser on startup (default: `1`; set to `0` for background services)
+
+macOS background service configuration: `deploy/macos/com.shotbase.server.plist`.
+It uses absolute paths for this checkout, runs at user login via launchd, disables
+browser auto-open and debug mode, and writes logs to `logs/shotbase.log`.
+See README.md for install, status, restart, stop, and removal commands.
 
 ---
 
@@ -158,19 +164,26 @@ Environment variables can override config file settings:
 |---|---|---|---|
 | GET | `/` | — | Serves SPA `index.html` with app version |
 | GET | `/api/project/current` | — | Returns current project info; auto-detects stale cache and rescans |
-| GET | `/api/project/recent` | — | Returns list of up to 6 recent projects with project titles |
+| GET | `/api/project/recent` | — | Returns up to 6 recent projects with titles, updated time, shot count and project-specific preview URL; no-store |
+| GET | `/api/project/preview/<project_id>` | — | Serves the first project cover, falling back to a promoted image, without switching the active project; private cache revalidation |
+| GET | `/api/project/covers` | `?project_path=` | Lists the active project's ordered covers; optional expected-path guard; private no-store |
+| POST | `/api/project/covers` | Form: `project_path`, multiple `files` | Uploads PNG/JPG/WebP covers (20 MB per image, 100 MB per request); rejects invalid batches; stale project returns 409 |
+| DELETE | `/api/project/covers/<cover_id>` | `{project_path}` | Removes one cover and returns the updated list; stale project returns 409 |
+| GET | `/api/project/covers/<project_id>/<cover_id>` | — | Serves an original cover through a project-bound URL; private cache revalidation |
 | POST | `/api/project/open` | `{path}` | Opens an existing project by path |
 | POST | `/api/project/create` | `{name, path}` | Creates new project folder + project_info.json |
 | GET | `/api/project/info` | — | Returns project_info.json contents |
 | POST | `/api/project/info` | `{title, description, ...}` | Updates project info; auto-merges with existing, preserves `created` |
-| GET | `/api/project/last-location` | — | Returns last folder used for project creation |
+| GET | `/api/project/last-location` | — | Returns effective creation folder: configured default, last successful location, current project parent, or home; skips unavailable folders |
+| GET | `/api/settings` | — | Returns `default_project_location` and effective `project_location` |
+| POST | `/api/settings` | `{default_project_location}` | Persists an existing writable server folder as default; empty string clears it |
 | GET | `/api/system/browse-folder` | optional: `?force_path=` `?force_warning=1` `?force_error=1` | Opens native folder picker (tkinter → AppleScript → home fallback) |
 
 ### Shot Routes (Blueprint: `/api/shots`, in `app/routes/shot_routes.py`)
 
 | Method | Path | Params/Body | Purpose |
 |---|---|---|---|
-| GET | `/api/shots/` | — | Get all shots with full info (ordered) |
+| GET | `/api/shots/` | — | Get all shots with full info (ordered), plus `order_revision` for reorder requests |
 | POST | `/api/shots/` | — | Create new shot with gap-filling number |
 | POST | `/api/shots/upload` | Form: `file`, `shot_name`, `file_type` | Upload image/video/audio; file_type: `image`/`first_image`/`last_image`/`video`/`alt_video`/`audio` |
 | POST | `/api/shots/notes` | `{shot_name, notes}` | Save shot notes (notes.txt) |
@@ -179,7 +192,7 @@ Environment variables can override config file settings:
 | GET | `/api/shots/prompt` | `?shot_name=&asset_type=&version=` | Get prompt for specific asset version |
 | GET | `/api/shots/prompt_versions` | `?shot_name=&asset_type=` | List all versions that have prompts |
 | POST | `/api/shots/rename` | `{old_name, new_name}` | Rename shot + all associated files (including alt_video) |
-| POST | `/api/shots/reorder` | `{shot_order: [...]}` | Persist shot order list |
+| POST | `/api/shots/reorder` | `{shot_order: [...], revision}` | Renumber shots and associated paths in order (SH001–SH999), with archived shots last; returns `data.shots`, `data.renamed`, `data.order_revision`; stale/missing revision returns 409 |
 | POST | `/api/shots/create-between` | `{after_shot}` | Create shot after given shot (or at top if null) |
 | GET | `/api/shots/versions/<shot_name>/<asset_type>` | — | List existing WIP media versions in the active project with current version; accepts legacy `image` alias |
 | GET | `/api/shots/version-media/<shot_name>/<asset_type>/<version>` | — | Stream a specific WIP version from the active project; supports `image` alias; requires browser cache revalidation |
@@ -226,7 +239,7 @@ shot_routes.py ──→ get_shot_manager(path) ──→ ShotManager (cached pe
                                                      │
                                           ┌──────────┘
                                           ├── Pillow (thumbnails, lazy generation)
-                                          ├── ffmpeg (video thumbs, optional)
+                                          ├── ffmpeg (video thumbs, bundled fallback via imageio-ffmpeg)
                                           ├── tkinter (folder picker)
                                           └── subprocess (reveal/open-folder/open-exports)
 ```
@@ -323,6 +336,16 @@ Every project directory contains these files (under `shots/`):
 - Video thumbs: `SH###_SH###_vthumb.jpg` (regular), `SH###_SH###_alt_vthumb.jpg` (alt)
 - Generated lazily on first request, cached indefinitely
 
+### `covers/` (project root)
+- Project cover originals use ratio plus a two-digit sequence, e.g. `4-3_01.png`, `3-4_01.jpg`, `16-9_01.webp`, `9-16_01.png`, or `其他_01.png`
+- `index.json`: ordered entries with `id`, `filename`, canonical `name`, `original_name`, `width`, `height`, `ratio`, and `number`
+- Classify visible dimensions after EXIF orientation with 1% ratio tolerance; each ratio has its own sequence shared across image formats
+- Multi-file uploads append in selection order; uploads validate the entire batch before saving. Existing numbers stay stable when another cover is deleted
+- Legacy UUID filenames migrate automatically on read, preserving IDs, URLs, original names and image bytes; exclusive copies and atomic manifest replacement protect failed migrations
+- Covers appear above the studio shot list in one horizontally scrollable strip, grouped as `4:3`, `3:4`, `16:9`, `9:16`, `其他`; empty groups are omitted
+- Clicking opens a native preview dialog; preview navigation retains the selected cover when upload completion reorders groups
+- The first available cover supplies the homepage project preview; projects without covers fall back to promoted shot images
+
 ---
 
 ## Shot Naming & Versioning Rules
@@ -378,6 +401,8 @@ Every project directory contains these files (under `shots/`):
 - **Single SPA**: `app/templates/index.html` — one Jinja2 template, `{{ version }}` injected
 - **CSS**: `app/static/css/main.css` (primary styles, dark theme default), `app/static/css/styles.css` (light theme overrides), `app/static/css/search-modal.css` (search modal styles), `app/static/css/visual-reorder.css` (visual reorder grid styles)
 - **JavaScript**: 
+  - `app/static/js/project-library.js` — homepage project list, preview/empty/error states, default location and launcher controls; styles in `project-library.css`, scoped to the homepage
+  - `app/static/js/project-covers.js` — project cover upload, horizontal strip, preview and deletion; styles in `project-covers.css`; storage in `app/services/project_covers.py`
   - `app/static/js/main.js` — monolithic SPA core: shot grid (with audio playback column), TOC, upload, export, modals, drag-and-drop, theme toggle
   - `app/static/js/search-modal.js` — client-side search with in-memory index, multi-token matching, filter pills, keyboard nav
   - `app/static/js/visual-reorder.js` — drag-and-drop shot sorting grid, thumbnail switching, preview/edit modes
@@ -446,7 +471,7 @@ Key patterns:
 
 ## Known Limitations & Gotchas
 
-- **ffmpeg is optional**: video thumbnails silently fail if ffmpeg is not on PATH
+- **Video thumbnail FFmpeg**: prefers ffmpeg on PATH, with an imageio-ffmpeg bundled binary fallback
 - **tkinter for folder picker**: may not be available in headless environments; falls back to home directory with a warning
 - **No database**: all state is in JSON files on disk; concurrent writes are not handled
 - **Shot manager caching**: `ShotManager` instances are cached per project path in Flask app config; cache is cleared when project folder mtime changes

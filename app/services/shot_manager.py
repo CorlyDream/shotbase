@@ -1,8 +1,10 @@
+import hashlib
 import json
 import logging
 import re
 from pathlib import Path
 
+from imageio_ffmpeg import get_ffmpeg_exe
 from PIL import Image
 
 from app.config.constants import (
@@ -13,6 +15,7 @@ from app.config.constants import (
     get_project_thumbnail_cache_dir,
 )
 from app.services.project_manager import ProjectManager
+from app.services.shot_reorder import renumber_shots
 
 logger = logging.getLogger(__name__)
 
@@ -323,10 +326,15 @@ class ShotManager:
         return shots
 
     def save_shot_order(self, shot_order):
-        """Save the order of shots."""
-        if not isinstance(shot_order, list):
-            raise ValueError('Shot order must be a list')
-        self._save_shot_order(shot_order)
+        """Save the order, renumbering shots and all associated asset paths."""
+        return renumber_shots(self, shot_order)
+
+    def get_order_revision(self):
+        """Fingerprint directory identities so an old tab cannot swap renamed shots."""
+        identities = sorted((path.name, path.stat().st_dev, path.stat().st_ino)
+                            for path in self.wip_dir.iterdir() if path.is_dir() and path.name.startswith("SH"))
+        state = [str(self.project_path.resolve()), identities, self._load_shot_order()]
+        return hashlib.sha256(json.dumps(state).encode("utf-8")).hexdigest()
 
     def create_shot_between(self, after_shot=None):
         """Create a new shot between existing shots.
@@ -1091,7 +1099,11 @@ class ShotManager:
         # stem is now "{shot_name}_{asset_stem}" where asset_stem may
         # be just the shot name (promoted video / legacy image), or
         # "{shot_name}_first", "{shot_name}_last", "{shot_name}_alt", etc.
-        shot_name = stem.split("_", 1)[0]
+        match = re.match(r"^(SH\d{3}(?:_\d{3})?)(_alt)?_", stem)
+        if not match:
+            return
+        shot_name = match[1]
+        thumbnail_prefix = shot_name + (match[2] or "")
 
         # Locate the source file by scanning the project directories
         shot_dir = self.wip_dir / shot_name
@@ -1113,14 +1125,16 @@ class ShotManager:
             if not d.exists():
                 continue
             for f in d.iterdir():
-                if not f.is_file():
+                extensions = ALLOWED_VIDEO_EXTENSIONS if is_video else ALLOWED_IMAGE_EXTENSIONS
+                if not f.is_file() or f.suffix.lower() not in extensions:
                     continue
-                expected_thumb = f"{shot_name}_{f.stem}_vthumb.jpg" if is_video else f"{shot_name}_{f.stem}_thumb.jpg"
+                suffix = "vthumb" if is_video else "thumb"
+                expected_thumb = f"{thumbnail_prefix}_{f.stem}_{suffix}.jpg"
                 if expected_thumb == thumb_filename:
                     if is_video:
-                        self.get_video_thumbnail_path(f, shot_name)
+                        self.get_video_thumbnail_path(f, thumbnail_prefix)
                     else:
-                        self.get_thumbnail_path(f, shot_name)
+                        self.get_thumbnail_path(f, thumbnail_prefix)
                     return
 
     def get_thumbnail_path(self, image_path, shot_name):
@@ -1171,29 +1185,27 @@ class ShotManager:
 
         if thumb_path.exists() and thumb_path.stat().st_mtime >= video_path.stat().st_mtime:
             return f"/api/shots/thumbnail/{thumb_filename}"
-        if not thumb_path.exists():
-            ffmpeg = _shutil.which("ffmpeg")
-            if not ffmpeg:
-                logger.warning("ffmpeg not found; skipping video thumbnail for %s", video_path)
-                return None
-            try:
-                self.thumbnail_cache_dir.mkdir(parents=True, exist_ok=True)
-                tmp_path = thumb_path.with_suffix(".tmp.jpg")
-                cmd = [ffmpeg, "-y", "-i", str(video_path), "-frames:v", "1", str(tmp_path)]
-                subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, shell=False)  # noqa: S603
-                with Image.open(tmp_path) as img:
-                    img.thumbnail(THUMBNAIL_SIZE, Image.Resampling.LANCZOS)
-                    if img.mode in ("RGBA", "LA", "P"):
-                        background = Image.new("RGB", img.size, (64, 64, 64))
-                        if img.mode == "P":
-                            img = img.convert("RGBA")
-                        background.paste(img, mask=img.split()[-1] if "A" in img.mode else None)
-                        img = background
-                    img.save(str(thumb_path), "JPEG", quality=85)
-                tmp_path.unlink(missing_ok=True)
-            except Exception as e:
-                logger.warning("Error creating video thumbnail: %s", e)
-                return None
+        tmp_path = thumb_path.with_suffix(".tmp.jpg")
+        try:
+            ffmpeg = _shutil.which("ffmpeg") or get_ffmpeg_exe()
+            self.thumbnail_cache_dir.mkdir(parents=True, exist_ok=True)
+            cmd = [ffmpeg, "-y", "-i", str(video_path), "-frames:v", "1", str(tmp_path)]
+            subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                           shell=False, timeout=30)  # noqa: S603
+            with Image.open(tmp_path) as img:
+                img.thumbnail(THUMBNAIL_SIZE, Image.Resampling.LANCZOS)
+                if img.mode in ("RGBA", "LA", "P"):
+                    background = Image.new("RGB", img.size, (64, 64, 64))
+                    if img.mode == "P":
+                        img = img.convert("RGBA")
+                    background.paste(img, mask=img.split()[-1] if "A" in img.mode else None)
+                    img = background
+                img.save(str(thumb_path), "JPEG", quality=85)
+        except Exception as e:
+            logger.warning("Error creating video thumbnail: %s", e)
+            return None
+        finally:
+            tmp_path.unlink(missing_ok=True)
 
         return f"/api/shots/thumbnail/{thumb_filename}"
 

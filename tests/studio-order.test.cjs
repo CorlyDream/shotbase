@@ -1,4 +1,4 @@
-/* Regression tests for stable shot identities and position-based UI numbering. */
+/* Regression tests for headings that match the actual media identifiers. */
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("node:path");
@@ -52,7 +52,7 @@ function fakeDocument(shotNames) {
     return {document, rows, items};
 }
 
-test("swapping two shots automatically renumbers visible headings without renaming their IDs", () => {
+test("headings always show actual filesystem identifiers, including an old saved order", () => {
     const StudioOrder = loadOrder();
     const shots = [
         {name: "SH001"},
@@ -62,7 +62,7 @@ test("swapping two shots automatically renumbers visible headings without renami
     ];
     const before = JSON.parse(JSON.stringify(shots));
     const labels = StudioOrder.computeVisibleShotLabels(shots);
-    assert.deepEqual(labels.map(x => x.number), ["SH001", "SH002", "SH003", "SH004"]);
+    assert.deepEqual(labels.map(x => x.number), ["SH001", "SH002", "SH004", "SH003"]);
     assert.deepEqual(labels.map(x => x.shotId), ["SH001", "SH002", "SH004", "SH003"]);
     assert.equal(labels[2].subtitle, "");
     assert.equal(labels[3].subtitle, "");
@@ -77,27 +77,27 @@ test("descriptive names remain visible while numeric display names are ignored",
         {name: "SH005", display_name: "  SH003  "},
         {name: "SH006_050", display_name: "Wake Up!"}
     ]);
-    assert.equal(result[0].number, "SH001");
+    assert.equal(result[0].number, "SH004");
     assert.equal(result[0].subtitle, "下床啦");
-    assert.equal(result[1].number, "SH002");
+    assert.equal(result[1].number, "SH003");
     assert.equal(result[1].subtitle, "");
     assert.equal(result[2].subtitle, "");
     assert.equal(result[3].subtitle, "Wake Up!");
 });
 
-test("archived shots are skipped when assigning active sequence numbers", () => {
+test("archiving does not disguise any shot's filesystem identifier", () => {
     const StudioOrder = loadOrder();
     const result = StudioOrder.computeVisibleShotLabels([
         {name: "SH002", archived: false},
         {name: "SH004", archived: true, display_name: "Archived"},
         {name: "SH003", archived: false}
     ]);
-    assert.deepEqual(result.map(x => x.number), ["SH001", "SH004", "SH002"]);
+    assert.deepEqual(result.map(x => x.number), ["SH002", "SH004", "SH003"]);
     assert.equal(result[1].archived, true);
     assert.equal(result[1].subtitle, "Archived");
 });
 
-test("reorder updates cards and sidebar labels while preserving stable DOM IDs", () => {
+test("cards and sidebar agree with filesystem identifiers before and after sorting", () => {
     const StudioOrder = loadOrder();
     const shots = [
         {name: "SH001", display_name: "Wake Up!"},
@@ -108,7 +108,7 @@ test("reorder updates cards and sidebar labels while preserving stable DOM IDs",
 
     StudioOrder.applyShotOrderLabels(shots, ui.document);
     assert.deepEqual(
-        ui.rows.get("SH004").title.children.map(x => x.textContent), ["SH002"]
+        ui.rows.get("SH004").title.children.map(x => x.textContent), ["SH004"]
     );
     assert.deepEqual(
         ui.items.get("SH003").children.map(x => x.textContent), ["SH003", "下床啦"]
@@ -120,16 +120,16 @@ test("reorder updates cards and sidebar labels while preserving stable DOM IDs",
     shots.sort((a, b) => order.indexOf(a.name) - order.indexOf(b.name));
     StudioOrder.applyShotOrderLabels(shots, ui.document);
 
-    assert.equal(ui.rows.get("SH003").title.children[0].textContent, "SH002");
-    assert.equal(ui.items.get("SH003").children[0].textContent, "SH002");
-    assert.equal(ui.rows.get("SH004").title.children[0].textContent, "SH003");
-    assert.equal(ui.items.get("SH004").children[0].textContent, "SH003");
+    assert.equal(ui.rows.get("SH003").title.children[0].textContent, "SH003");
+    assert.equal(ui.items.get("SH003").children[0].textContent, "SH003");
+    assert.equal(ui.rows.get("SH004").title.children[0].textContent, "SH004");
+    assert.equal(ui.items.get("SH004").children[0].textContent, "SH004");
     assert.equal(ui.rows.get("SH004").title.dataset.displayName, "SH003");
     assert.equal(ui.rows.size, 3);
 });
 
 
-test("the page and all reorder/edit paths refresh the position-derived labels", () => {
+test("the page and edit paths refresh labels from current shot identifiers", () => {
     const root = path.join(__dirname, "..");
     const html = fs.readFileSync(path.join(root, "app/templates/index.html"), "utf8");
     const main = fs.readFileSync(path.join(root, "app/static/js/main.js"), "utf8");

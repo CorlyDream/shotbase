@@ -16,6 +16,7 @@ requires-python = ">=3.13.1"
 dependencies = [
   "flask",
   "flask-cors",
+  "imageio-ffmpeg>=0.6.0",
   "pillow",
   "python-dotenv>=1.1.1",
 ]

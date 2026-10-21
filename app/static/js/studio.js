@@ -241,11 +241,7 @@
         if (bar) bar.style.width = progress + "%";
     }
 
-    /** Keep visible SH001-style numbers in sync with the current shot order.
-     *
-     * Shot IDs remain stable for every upload and historical version. This
-     * updates only the user-facing label on cards and the sidebar navigation.
-     */
+    /** Show the actual shot identifiers returned after filesystem renumbering. */
     function refreshStudioOrderLabels() {
         if (window.StudioOrder) {
             window.StudioOrder.applyShotOrderLabels(shots, document);
@@ -651,7 +647,6 @@
             const compact = main.classList.toggle("studio-compact");
             event.target.textContent = compact ? "切换宽松视图" : "切换紧凑视图";
             event.target.setAttribute("aria-pressed", String(compact));
-            localStorage.setItem("studio-density", compact ? "compact" : "comfortable");
         }
     }, true);
 
@@ -709,18 +704,8 @@
 
     document.body.classList.add("studio-design");
 
-    // The previous release's "compact" dimensions are the new comfortable
-    // default. Migrate this saved preference once to prevent a surprise jump
-    // into the much denser strip view immediately after upgrading.
-    if (localStorage.getItem("studio-density-v2") !== "true") {
-        if (localStorage.getItem("studio-density") === "compact") {
-            localStorage.setItem("studio-density", "comfortable");
-        }
-        localStorage.setItem("studio-density-v2", "true");
-    }
-
     const densityButton = document.getElementById("studio-density-toggle");
-    if (densityButton && localStorage.getItem("studio-density") === "compact") {
+    if (densityButton) {
         document.getElementById("main-interface").classList.add("studio-compact");
         densityButton.textContent = "切换宽松视图";
         densityButton.setAttribute("aria-pressed", "true");

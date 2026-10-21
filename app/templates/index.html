@@ -10,6 +10,8 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/visual-reorder.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/search-modal.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/studio.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/project-covers.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/project-library.css') }}">
     <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='icons/apple-touch-icon.png') }}">
     <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='icons/favicon-32x32.png') }}">
     <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='icons/favicon-16x16.png') }}">
@@ -22,50 +24,63 @@
     
     <!-- Setup Screen -->
     <div id="setup-screen" class="setup-screen">
-        <div class="setup-card">
-            <div class="logo-container" style="display: flex; align-items: center; justify-content: center; margin-bottom: 20px;">
-                <img src="{{ url_for('static', filename='icons/android-chrome-192x192.png') }}" alt="ShotBase Logo" class="logo-icon" style="height: 64px; width: 64px; margin-right: 15px;">
-                <div class="logo-text" style="display: flex; flex-direction: column; align-items: flex-start; justify-content: center;">
-                    <h2 style="margin: 0; padding: 0; font-size: 2em; line-height: 1;">SHOTBASE</h2>
-                    <span class="version-text" style="font-size: 1em; color: #b5b5b5; margin-top: 5px; opacity: 1;">v{{ version }}</span>
-                </div>
+        <header class="library-header">
+            <div class="library-brand">
+                <img src="{{ url_for('static', filename='icons/android-chrome-192x192.png') }}" alt="" width="42" height="42">
+                <span class="library-wordmark">ShotBase</span>
+                <span class="version-text">v{{ version }}</span>
             </div>
-            <p style="margin-bottom: 30px; color: #b5b5b5; text-align: center;">No project is currently open.</p>
-            
-            <div class="setup-actions" style="margin-bottom: 30px;">
-                <button class="green-button large-button" onclick="openProjectDialog()" style="margin-right: 15px;">
-                    Open Project...
+            <div class="library-header-tools">
+                <button id="library-theme-toggle" class="library-icon-button" type="button" data-library-action="theme" title="切换主题" aria-label="切换主题">
+                    <img class="library-icon" src="{{ url_for('static', filename='icons/ui/sun.svg') }}" alt="">
                 </button>
-                <button class="dark-button large-button" onclick="openCreateProjectModal()">
-                    New Project...
+                <button class="library-icon-button" type="button" data-settings-action="open" title="系统设置" aria-label="系统设置">
+                    <img class="library-icon" src="{{ url_for('static', filename='icons/ui/settings-2.svg') }}" alt="">
                 </button>
             </div>
-            
-            <div id="recent-projects-section" style="display: none;">
-                <h3 style="margin-bottom: 15px; color: #b5b5b5;">Recent Projects</h3>
-                <div id="recent-projects-list" class="recent-projects-list"></div>
-            </div>
-            
-            <div class="manual-path-section" style="margin-top: 24px; padding-top: 20px; border-top: 1px solid #333;">
-                <button id="manual-path-toggle" class="link-button" onclick="toggleManualPath(); return false;" aria-expanded="false" aria-controls="manual-path-fallback">
-                    Manual path input...
-                </button>
-                <div class="manual-path-fallback" id="manual-path-fallback" style="display: none; margin-top: 10px;">
-                    <input
-                        id="manual-path-input"
-                        class="path-input"
-                        type="text"
-                        placeholder="Enter full path to project folder"
-                    />
-                    <button class="dark-button" onclick="loadProjectFromManualPath()">
-                        Load from Path
+        </header>
+        <main class="library-main">
+            <div class="library-heading">
+                <h1>我的项目</h1>
+                <div class="library-actions">
+                    <button class="library-button" type="button" data-library-action="open">
+                        <img class="library-icon" src="{{ url_for('static', filename='icons/ui/folder-open.svg') }}" alt="">打开项目
                     </button>
-                    <button class="dark-button" onclick="toggleManualPath()">
-                        Hide
+                    <button class="library-button library-button-primary" type="button" data-library-action="new">
+                        <img class="library-icon" src="{{ url_for('static', filename='icons/ui/plus.svg') }}" alt="">新建项目
                     </button>
                 </div>
             </div>
-        </div>
+            <section id="recent-projects-section" aria-labelledby="library-recent-title">
+                <div class="library-list-heading">
+                    <h2 id="library-recent-title">最近项目</h2>
+                    <span>按最近打开排序</span>
+                </div>
+                <div id="library-status" class="library-status" role="status">正在读取项目…</div>
+                <button id="library-retry" class="library-button" type="button" data-library-action="retry" hidden>
+                    <img class="library-icon" src="{{ url_for('static', filename='icons/ui/refresh-cw.svg') }}" alt="">重新加载
+                </button>
+                <div id="recent-projects-list" class="library-project-list"></div>
+            </section>
+            <section class="library-location-section" aria-label="项目位置">
+                <div class="library-location">
+                    <img class="library-icon" src="{{ url_for('static', filename='icons/ui/folder.svg') }}" alt="">
+                    <div><span class="library-location-label">新项目保存位置</span><span id="library-location-path">正在读取…</span></div>
+                    <button class="library-text-button" type="button" data-settings-action="open" aria-label="更改默认保存位置">更改</button>
+                </div>
+                <button id="manual-path-toggle" class="library-text-button" type="button" data-library-action="manual" aria-expanded="false" aria-controls="manual-path-fallback">按路径打开项目</button>
+                <div id="manual-path-fallback" style="display: none;">
+                    <form id="manual-path-form">
+                        <label for="manual-path-input">项目文件夹路径（服务器）</label>
+                        <div class="library-path-fields">
+                            <input id="manual-path-input" type="text" placeholder="/Users/…/项目文件夹" autocomplete="off" required>
+                            <button class="library-button" type="submit">打开此路径</button>
+                        </div>
+                    </form>
+                </div>
+            </section>
+        </main>
+        <footer class="library-footer"><span>ShotBase</span><span>AI 影像项目库</span></footer>
     </div>
 
     <!-- Main Interface (hidden initially) -->
@@ -80,6 +95,7 @@
                         <div id="project-subtitle" class="project-subtitle"></div>
                     </div>
                     <div class="header-controls">
+                        <button id="system-settings-button" class="dark-button icon-button system-settings-trigger" type="button" data-settings-action="open" title="系统设置" aria-label="系统设置"><span aria-hidden="true">&#9881;</span></button>
                         <button class="menu-button icon-button" onclick="showSetupScreen()" title="Back to Menu" aria-label="Back to Menu">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3"></path>
@@ -152,6 +168,36 @@
                     </div>
                 </div>
             </section>
+            <section id="project-covers" class="project-covers" aria-labelledby="project-covers-heading">
+                <div class="project-covers-head">
+                    <div class="project-covers-title">
+                        <h3 id="project-covers-heading">项目封面</h3>
+                        <span id="project-cover-count" class="project-cover-count" hidden></span>
+                    </div>
+                    <div class="project-covers-tools">
+                        <button id="project-cover-previous" class="project-cover-control" type="button"
+                                data-cover-action="previous" title="向左浏览封面" aria-label="向左浏览封面" disabled>
+                            <span class="project-cover-icon project-cover-icon-chevron" aria-hidden="true"></span>
+                        </button>
+                        <button id="project-cover-next" class="project-cover-control" type="button"
+                                data-cover-action="next" title="向右浏览封面" aria-label="向右浏览封面" disabled>
+                            <span class="project-cover-icon project-cover-icon-chevron project-cover-icon-next" aria-hidden="true"></span>
+                        </button>
+                        <button id="project-cover-upload" class="project-cover-control" type="button"
+                                data-cover-action="upload" title="上传封面（PNG、JPG、WebP，每张不超过20 MB）">
+                            <span class="project-cover-icon project-cover-icon-plus" aria-hidden="true"></span>
+                            <span>上传封面</span>
+                        </button>
+                        <input id="project-cover-files" type="file" accept=".png,.jpg,.jpeg,.webp" multiple hidden>
+                    </div>
+                </div>
+                <p id="project-cover-status" class="project-cover-status" role="status" hidden></p>
+                <div id="project-cover-error" class="project-cover-error" role="alert" hidden>
+                    <span id="project-cover-error-text"></span>
+                    <button class="project-cover-retry" type="button" data-cover-action="retry">重新读取</button>
+                </div>
+                <div id="project-cover-list" class="project-cover-list" role="region" aria-label="项目封面列表" tabindex="0"></div>
+            </section>
             <div class="studio-section-heading">
                 <div><h3>镜头列表</h3><p>拖动镜头标题调整顺序 · 点击素材查看 · 上传后可比较历史版本</p></div>
                 <button id="studio-density-toggle" type="button" aria-pressed="false">切换紧凑视图</button>
@@ -196,6 +242,25 @@
                 <button class="dark-button" onclick="closeCreateProjectModal()">Cancel</button>
             </div>
         </div>
+    </div>
+
+    <!-- System Settings Modal -->
+    <div id="system-settings-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="system-settings-title">
+        <form id="system-settings-form" class="modal-content">
+            <h3 id="system-settings-title">系统设置</h3>
+            <label for="default-project-location">默认项目保存位置（服务器）</label>
+            <div class="settings-path-row">
+                <input id="default-project-location" type="text" placeholder="留空使用上次成功创建的位置" autocomplete="off" />
+                <button class="dark-button icon-button" type="button" data-settings-action="browse" title="选择文件夹" aria-label="选择文件夹">
+                    <img src="{{ url_for('static', filename='icons/folder_24.png') }}" alt="" />
+                </button>
+            </div>
+            <div id="system-settings-error" role="alert" hidden></div>
+            <div class="modal-buttons">
+                <button id="system-settings-save" class="green-button" type="submit">保存</button>
+                <button class="dark-button" type="button" data-settings-action="close">取消</button>
+            </div>
+        </form>
     </div>
 
     <!-- Prompt Modal -->
@@ -530,11 +595,35 @@
         </section>
     </div>
 
+    <dialog id="project-cover-preview" class="project-cover-dialog" aria-labelledby="project-cover-preview-name">
+        <div class="project-cover-dialog-head">
+            <h2 id="project-cover-preview-name" class="project-cover-dialog-name">项目封面</h2>
+            <div class="project-cover-dialog-tools">
+                <button id="project-cover-preview-previous" class="project-cover-control" type="button"
+                        data-cover-preview-action="previous" title="上一张封面" aria-label="上一张封面">
+                    <span class="project-cover-icon project-cover-icon-chevron" aria-hidden="true"></span>
+                </button>
+                <button id="project-cover-preview-next" class="project-cover-control" type="button"
+                        data-cover-preview-action="next" title="下一张封面" aria-label="下一张封面">
+                    <span class="project-cover-icon project-cover-icon-chevron project-cover-icon-next" aria-hidden="true"></span>
+                </button>
+                <button class="project-cover-control" type="button" data-cover-preview-action="close"
+                        title="关闭封面预览" aria-label="关闭封面预览">
+                    <span class="project-cover-icon project-cover-icon-x" aria-hidden="true"></span>
+                </button>
+            </div>
+        </div>
+        <img id="project-cover-preview-image" class="project-cover-dialog-image" alt="">
+    </dialog>
+
     <!-- Back to Top Button -->
     <button class="back-to-top" id="backToTop" title="Back to Top"></button>
     
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/project-library.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/project-settings.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/project-covers.js') }}"></script>
     <script src="{{ url_for('static', filename='js/visual-reorder.js') }}"></script>
     <script src="{{ url_for('static', filename='js/search-modal.js') }}"></script>
     <script src="{{ url_for('static', filename='js/modal-behavior.js') }}"></script>

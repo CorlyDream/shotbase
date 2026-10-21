@@ -52,14 +52,16 @@ function createHarness() {
     };
     const noop = () => {};
     const dummy = {addEventListener: noop, focus: noop, open: false};
+    const mainClasses = new Set();
     const controls = new Map([
+        ["main-interface", {classList: {add: name => mainClasses.add(name)}}],
         ["studio-notes-modal", {...dummy}],
         ["studio-notes-editor", {...dummy}],
         ["studio-notes-save", {...dummy}],
         ["studio-notes-close", {...dummy}],
         ["studio-notes-cancel", {...dummy}],
         ["studio-version-file", {...dummy}],
-        ["studio-density-toggle", {...dummy}]
+        ["studio-density-toggle", {...dummy, setAttribute: noop}]
     ]);
     const context = {
         shots: [],
@@ -102,8 +104,14 @@ function createHarness() {
         return attributes;
     }
 
-    return {clickAction, caption, prompt, visibleClasses};
+    return {clickAction, caption, prompt, visibleClasses, mainClasses, controls};
 }
+
+test("page opens in compact view with the matching toggle label", () => {
+    const ui = createHarness();
+    assert.equal(ui.mainClasses.has("studio-compact"), true);
+    assert.equal(ui.controls.get("studio-density-toggle").textContent, "切换宽松视图");
+});
 
 test("first-frame caption opens only on request and can be closed again", () => {
     const ui = createHarness();

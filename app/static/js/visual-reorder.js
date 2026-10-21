@@ -384,7 +384,8 @@ function closeVisualReorderModal() {
     document.body.style.overflow = '';
 }
 
-function saveVisualReorder() {
+async function saveVisualReorder() {
+    if (shotReorderPending) return;
     var cards = document.querySelectorAll('#visual-reorder-grid .visual-reorder-card');
     if (cards.length === 0) {
         closeVisualReorderModal();
@@ -403,28 +404,8 @@ function saveVisualReorder() {
 
     var shotOrder = activeOrdered.concat(archived);
 
-    fetch('/api/shots/reorder', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ shot_order: shotOrder })
-    })
-    .then(function(resp) { return resp.json(); })
-    .then(function(result) {
-        if (result.success) {
-            shots.sort(function(a, b) {
-                return shotOrder.indexOf(a.name) - shotOrder.indexOf(b.name);
-            });
-            renderShots();
-            closeVisualReorderModal();
-            showNotification('Shot order saved');
-        } else {
-            showNotification(result.error || 'Failed to save order', 'error');
-        }
-    })
-    .catch(function(e) {
-        console.error('Visual reorder save failed:', e);
-        showNotification('Error saving shot order', 'error');
-    });
+    await persistShotOrder(shotOrder);
+    closeVisualReorderModal();
 }
 
 // ============================================================

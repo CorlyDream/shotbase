@@ -5,6 +5,7 @@ __pycache__/
 *.py[cod]
 venv/
 Tests/
+!tests/
 .DS_Store
 .env
 .venv
@@ -12,3 +13,4 @@ uv.lock
 
 # Disposable real-browser QA artifacts
 browser-test-results/
+logs/

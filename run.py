@@ -35,20 +35,23 @@ if __name__ == "__main__":
     host = os.environ.get("SHOTBUDDY_HOST", cfg_host or "127.0.0.1")
     port = int(os.environ.get("SHOTBUDDY_PORT", cfg_port or 5001))
     debug = os.environ.get("SHOTBUDDY_DEBUG", "0").lower() in {"1", "true", "yes"}
+    open_browser = os.environ.get("SHOTBUDDY_OPEN_BROWSER", "1").lower() in {"1", "true", "yes"}
+    browser_host = "127.0.0.1" if host == "0.0.0.0" else host  # noqa: S104 - compare the bind address for browser use
 
     def _open_browser_when_ready(url):
         while True:
             try:
-                with socket.create_connection((host, port), timeout=1):
+                with socket.create_connection((browser_host, port), timeout=1):
                     break
             except OSError:
                 time.sleep(0.1)
         webbrowser.open_new(url)
 
-    threading.Thread(
-        target=_open_browser_when_ready,
-        args=(f"http://{host}:{port}/",),
-        daemon=True,
-    ).start()
+    if open_browser:
+        threading.Thread(
+            target=_open_browser_when_ready,
+            args=(f"http://{browser_host}:{port}/",),
+            daemon=True,
+        ).start()
 
     app.run(debug=debug, host=host, port=port)

@@ -6,6 +6,7 @@
 
 // Registry: modal element ID → close function
 var _modalCloseMap = {
+    'system-settings-modal': closeSystemSettingsModal,
     'create-project-modal': closeCreateProjectModal,
     'prompt-modal': closePromptModal,
     'reorder-modal': closeReorderModal,

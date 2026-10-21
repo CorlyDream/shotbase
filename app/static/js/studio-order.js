@@ -1,8 +1,7 @@
-/* Position-based shot numbers for the storyboard UI.
+/* Shot labels for the storyboard UI.
  *
- * A shot's SH### directory name is a stable media identifier, not its position.
- * Sorting changes only the displayed number; media paths, prompts and version
- * history must keep referencing the stable identifier.
+ * Show the actual media identifier. Reordering renumbers directories and assets
+ * on the server and replaces the client shot data with the updated identifiers.
  */
 (function attachStudioOrder(root, createModule) {
     const api = createModule();
@@ -15,14 +14,11 @@
 
     const numericDisplayName = /^SH\d{3}(?:_\d{3})?$/i;
 
-    /** Give active shots consecutive SH001-style labels without changing their IDs. */
+    /** Match headings to the shot names used for media paths and uploads. */
     function computeVisibleShotLabels(shots) {
-        let activeIndex = 0;
         return shots.map(shot => {
             const archived = !!shot.archived;
-            const number = archived
-                ? shot.name
-                : "SH" + String(++activeIndex).padStart(3, "0");
+            const number = shot.name;
             const displayName = typeof shot.display_name === "string"
                 ? shot.display_name
                 : "";
@@ -63,11 +59,7 @@
         if (!isSidebar) container.dataset.displayName = label.displayName;
     }
 
-    /** Re-label storyboard cards and the TOC based on the current shot order.
-     *
-     * The stable shot.name is still used to locate each row and upload target.
-     * This function is safe to call after a render, a drag reorder or an edit.
-     */
+    /** Refresh card and TOC labels from the latest server-provided shot names. */
     function applyShotOrderLabels(shots, doc) {
         if (!doc || !Array.isArray(shots)) return [];
 

@@ -1,5 +1,7 @@
 let currentProject = null;
 let shots = [];
+let shotOrderRevision = null;
+let shotReorderPending = false;
 let savedScrollY = 0;
 let savedRowId = null;
 let tocObserver = null;
@@ -32,6 +34,13 @@ function applyTheme(theme) {
     const btn = document.getElementById('theme-toggle');
     if (btn) {
         btn.textContent = theme === 'light' ? '☀️' : '🌙';
+    }
+    const libraryTheme = document.getElementById('library-theme-toggle');
+    if (libraryTheme) {
+        const label = theme === 'light' ? '切换深色主题' : '切换浅色主题';
+        libraryTheme.title = label;
+        libraryTheme.setAttribute('aria-label', label);
+        libraryTheme.querySelector('img').src = `/static/icons/ui/${theme === 'light' ? 'moon' : 'sun'}.svg`;
     }
 }
 
@@ -317,6 +326,10 @@ async function checkForProject() {
 }
 
 function showSetupScreen() {
+    window.projectCovers?.reset();
+    document.body.classList.add('project-library-open');
+    document.getElementById('manual-path-fallback').style.display = 'none';
+    document.getElementById('manual-path-toggle').setAttribute('aria-expanded', 'false');
     // Hide TOC panel when leaving project
     const toc = document.getElementById('shot-toc');
     if (toc) {
@@ -337,41 +350,7 @@ function showSetupScreen() {
 }
 
 async function loadRecentProjects() {
-    try {
-        const response = await fetch('/api/project/recent');
-        const result = await response.json();
-
-        const recentSection = document.getElementById('recent-projects-section');
-        const recentList = document.getElementById('recent-projects-list');
-
-        if (result.success && result.data && result.data.length > 0) {
-            recentSection.style.display = 'block';
-            recentList.innerHTML = '';
-
-            result.data.forEach(project => {
-                const projectItem = document.createElement('div');
-                projectItem.className = 'recent-project-item';
-                projectItem.innerHTML = `
-                            <div class="recent-project-info">
-                                <div class="recent-project-name">${escapeHtml(project.name)}</div>
-<div class="recent-project-path" title="${escapeHtml(project.path)}">${escapeHtml(project.path)}</div>
-                            </div>
-                            <button class="dark-button" data-project-path="${project.path}">Open</button>
-                        `;
-                // Add event listener to the button to avoid escaping issues with onclick attribute
-                const openButton = projectItem.querySelector('button');
-                openButton.addEventListener('click', function () {
-                    openRecentProject(this.getAttribute('data-project-path'));
-                });
-                recentList.appendChild(projectItem);
-            });
-        } else {
-            recentSection.style.display = 'none';
-        }
-    } catch (error) {
-        console.error('Error loading recent projects:', error);
-        document.getElementById('recent-projects-section').style.display = 'none';
-    }
+    await window.projectLibrary.load();
 }
 
 function updatePageTitle(project) {
@@ -415,6 +394,7 @@ function updateProjectHeader(info, fallbackName) {
 }
 
 function showMainInterface() {
+    document.body.classList.remove('project-library-open');
     document.getElementById('setup-screen').style.display = 'none';
     document.getElementById('main-interface').style.display = 'block';
     updateProjectHeader(currentProject.info || {}, currentProject.name);
@@ -425,6 +405,7 @@ function showMainInterface() {
     }
     // Set flag to indicate we're in a project
     sessionStorage.setItem('inProject', 'true');
+    window.projectCovers?.open(currentProject.path);
 }
 
 async function loadShots(rowId = null) {
@@ -438,6 +419,7 @@ async function loadShots(rowId = null) {
 
         if (result.success) {
             shots = result.data;
+            shotOrderRevision = result.order_revision;
             renderShots();
             document.getElementById('loading').style.display = 'none';
             document.getElementById('shot-grid').style.display = 'block';
@@ -490,6 +472,10 @@ function positionToc() {
     const header = document.querySelector('.header');
 
     if (!toc || !grid) return;
+    if (document.body.classList.contains('project-library-open')) {
+        toc.style.display = 'none';
+        return;
+    }
 
     const gridRect = grid.getBoundingClientRect();
     const headerHeight = header ? header.offsetHeight : 0;
@@ -808,6 +794,36 @@ function toggleArchivedSection() {
     localStorage.setItem('archivedOpen', isOpen ? 'true' : 'false');
 }
 
+async function persistShotOrder(shotOrder) {
+    if (shotReorderPending) return false;
+    shotReorderPending = true;
+    try {
+        const response = await fetch('/api/shots/reorder', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ shot_order: shotOrder, revision: shotOrderRevision })
+        });
+        const result = await response.json();
+        if (!result.success) {
+            await loadShots();
+            showNotification(result.error || 'Failed to save order', 'error');
+            return false;
+        }
+        shots = result.data.shots;
+        shotOrderRevision = result.data.order_revision;
+        renderShots();
+        showNotification('Shot order saved');
+        return true;
+    } catch (error) {
+        await loadShots();
+        console.error('Error saving shot order:', error);
+        showNotification('Error saving shot order', 'error');
+        return false;
+    } finally {
+        shotReorderPending = false;
+    }
+}
+
 function initSortable() {
     const activeList = document.getElementById('active-shot-list');
     if (!activeList) return;
@@ -815,32 +831,13 @@ function initSortable() {
     new Sortable(activeList, {
         animation: 150,
         handle: '.shot-name',
+        onMove: () => !shotReorderPending,
         onEnd: async function (evt) {
             const shotOrder = Array.from(activeList.children)
                 .filter(child => child.classList.contains('shot-row'))
                 .map(child => child.id.replace('shot-row-', ''));
 
-            try {
-                const response = await fetch('/api/shots/reorder', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ shot_order: shotOrder })
-                });
-                const result = await response.json();
-                if (result.success) {
-                    showNotification('Shot order saved');
-                    // Re-sync the local shots array with the new order
-                    shots.sort((a, b) => shotOrder.indexOf(a.name) - shotOrder.indexOf(b.name));
-                    // Update the TOC to reflect the new shot order
-                    renderTOC();
-                    window.refreshStudioOrderLabels?.();
-                } else {
-                    showNotification(result.error || 'Failed to save order', 'error');
-                }
-            } catch (error) {
-                console.error('Error saving shot order:', error);
-                showNotification('Error saving shot order', 'error');
-            }
+            await persistShotOrder(shotOrder);
         }
     });
 }
@@ -921,7 +918,7 @@ function createDropZone(shot, type) {
             mediaHtml = `<div class="preview-thumbnail audio-thumbnail" onclick="playAudio('${shot.name}', '${escDn}')">&#9835;</div>`;
         } else if (isVideo) {
             const videoStyle = thumbnailUrl ?
-                `background-image: url('${thumbnailUrl}'); background-size: cover; background-position: center;` :
+                `background-image: url('${thumbnailUrl}'); background-size: contain; background-position: center; background-repeat: no-repeat;` :
                 'background: #404040;';
             mediaHtml = `<div class="preview-thumbnail video-thumbnail" style="${videoStyle}" onclick="playVideo('${shot.name}', '${escDn}', '${type}')"></div>`;
         } else {
@@ -1330,6 +1327,7 @@ async function handleRowDrop(event) {
 
         if (result.success) {
             const newShot = result.data;
+            shotOrderRevision = result.order_revision;
             showNotification(`Shot ${newShot.name} created`);
 
             // Insert new shot into local state and render before upload
@@ -1535,25 +1533,15 @@ async function archiveShot(shotName, archived) {
             if (idx !== -1) {
                 shots[idx] = result.data;
             }
-            // Flip the archive/unarchive button icon on the row
-            const row = document.getElementById(`shot-row-${shotName}`);
-            if (row) {
-                const btn = row.querySelector('.action-cell .icon-btn');
-                if (btn) {
-                    if (archived) {
-                        btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="7 14 12 9 17 14"></polyline><line x1="12" y1="9" x2="12" y2="21"></line><rect x="3" y="3" width="18" height="6" rx="2"></rect></svg>';
-                        btn.title = 'Unarchive';
-                        btn.setAttribute('aria-label', 'Unarchive');
-                        row.classList.add('archived');
-                    } else {
-                        btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line><rect x="3" y="15" width="18" height="6" rx="2"></rect></svg>';
-                        btn.title = 'Archive';
-                        btn.setAttribute('aria-label', 'Archive');
-                        row.classList.remove('archived');
-                    }
-                }
-            }
-            showNotification(archived ? `Archived ${shotName}. Refresh page (F5) to sort.` : `Unarchived ${shotName}. Refresh page (F5) to sort.`);
+            if (archived) localStorage.setItem('archivedOpen', 'true');
+            captureScroll();
+            renderShots();
+            requestAnimationFrame(() => {
+                document.getElementById(`shot-row-${shotName}`)?.scrollIntoView({
+                    behavior: 'smooth', block: 'center'
+                });
+            });
+            showNotification(archived ? `Archived ${shotName}.` : `Unarchived ${shotName}.`);
         } else {
             showNotification(result.error || 'Failed to update archive state', 'error');
         }
@@ -1825,6 +1813,7 @@ function closeReorderModal() {
 }
 
 async function saveReorder() {
+    if (shotReorderPending) return;
     const list = document.getElementById('reorder-list');
     if (!list) return;
 
@@ -1838,28 +1827,8 @@ async function saveReorder() {
     const archived = shots.filter(s => s.archived).map(s => s.name);
     const shot_order = activeOrdered.concat(archived);
 
-    try {
-        const response = await fetch('/api/shots/reorder', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ shot_order: shot_order })
-        });
-
-        const result = await response.json();
-
-        if (result.success) {
-            // Update local shots array to match new order
-            shots.sort((a, b) => shot_order.indexOf(a.name) - shot_order.indexOf(b.name));
-            renderShots();
-            closeReorderModal();
-            showNotification('Shot order saved');
-        } else {
-            showNotification(result.error || 'Failed to save order', 'error');
-        }
-    } catch (error) {
-        console.error('Error saving shot order:', error);
-        showNotification('Error saving shot order', 'error');
-    }
+    await persistShotOrder(shot_order);
+    closeReorderModal();
 }
 
 // Filter functionality for reorder modal

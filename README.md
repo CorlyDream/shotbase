@@ -109,7 +109,59 @@ Get started with ShotBase in just a few steps. Using `uv` is recommended for its
     ```
 
 4.  **Open Your Browser**
-    Navigate to **http://127.0.0.1:5001** to start using ShotBase!
+    Navigate to **http://192.168.2.4:5001** to start using ShotBase!
+
+### Default project location
+
+Open System Settings using the gear button in the project header or start menu. Set the default
+project location to an existing writable folder on the computer running ShotBase.
+New Project fills in this folder automatically, including after a server restart
+or when using another browser. The preference is stored in `projects.json`.
+
+Leave the setting empty to use the last successful creation location. Unavailable
+locations are skipped, falling back to the current project's parent folder or
+the server user's home directory. Failed creation attempts do not replace the
+remembered location. A folder chosen for a single new project does not change an
+explicit default.
+
+### macOS background service
+
+`shotbuddy.cfg` listens only on `192.168.2.4:5001`. On this Mac, use
+`http://192.168.2.4:5001` while that interface is available. Loopback and other
+local IPv4 interfaces are not listening.
+
+The launchd configuration in `deploy/macos/com.shotbase.server.plist` uses this
+checkout at `/Users/ajk-corly/vscode/shotbase` and uv at `/opt/homebrew/bin/uv`.
+Adjust its absolute paths before using it on another machine or moving the checkout.
+Install dependencies with `uv sync` before installing the service; the service uses
+`uv run --no-sync run.py` and disables debug mode and automatic browser opening.
+For foreground startup, `SHOTBUDDY_OPEN_BROWSER=0 uv run run.py` also disables
+automatic browser opening.
+
+Run these commands from the repository root to install and start the service:
+
+```bash
+mkdir -p "$HOME/Library/LaunchAgents" logs
+cp deploy/macos/com.shotbase.server.plist "$HOME/Library/LaunchAgents/"
+launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/com.shotbase.server.plist"
+```
+
+The service starts at login, survives closing the terminal, and restarts if its
+process exits. It stops at logout and does not run while the Mac is asleep.
+Management commands:
+
+```bash
+# Status
+launchctl print "gui/$(id -u)/com.shotbase.server"
+# Restart after changing code or configuration
+launchctl kickstart -k "gui/$(id -u)/com.shotbase.server"
+# Stop until the next login (or another bootstrap)
+launchctl bootout "gui/$(id -u)/com.shotbase.server"
+# Logs, from the repository root
+tail -f logs/shotbase.log
+# Remove login startup after stopping the service
+rm "$HOME/Library/LaunchAgents/com.shotbase.server.plist"
+```
 
 ## 📁 How It Works: Project Folder Structure
 

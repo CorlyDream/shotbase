@@ -4,7 +4,6 @@ import re
 import unittest
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -35,7 +34,10 @@ class StudioLayoutContractTests(unittest.TestCase):
         """Compact cards keep media and notes in a compact horizontal sequence."""
         self.assertIn("#main-interface.studio-compact .shot-row.studio-shot-card", self.css)
         self.assertIn('"title first last video notes archive"', self.css)
-        self.assertIn('"title first alt audio notes archive"', self.css)
+        grid_areas = re.findall(r"grid-template-areas:\s*([^;]+);", self.css)
+        self.assertTrue(grid_areas)
+        for areas in grid_areas:
+            self.assertNotRegex(areas, r"\b(?:alt|audio)\b")
         self.assertIn("#main-interface.studio-compact .studio-overview", self.css)
 
     def test_compact_first_frame_uses_vertical_image_canvas_and_one_line_footer(self):
@@ -74,10 +76,10 @@ class StudioLayoutContractTests(unittest.TestCase):
         self.assertIn("#main-interface.studio-compact .studio-asset-first_image", self.css)
 
 
-    def test_prior_compact_setting_is_migrated_to_new_comfortable_view(self):
-        """Do not surprise existing users with a much denser layout on upgrade."""
-        self.assertIn('"studio-density-v2"', self.js)
-        self.assertIn('localStorage.setItem("studio-density", "comfortable")', self.js)
+    def test_saved_density_does_not_override_compact_on_page_open(self):
+        """Each page load starts compact regardless of old saved preferences."""
+        self.assertNotIn('localStorage.getItem("studio-density")', self.js)
+        self.assertNotIn('"studio-density-v2"', self.js)
 
 
 if __name__ == "__main__":
